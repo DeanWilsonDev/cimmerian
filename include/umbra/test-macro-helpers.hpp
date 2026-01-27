@@ -3,7 +3,6 @@
 /* ##################################### */
 /* ========= MACRO HELPERS: ============ */
 /* ##################################### */
-
 #define MACRO_CAT2(a, b) a##b
 #define MACRO_CAT(a, b) MACRO_CAT2(a, b)
 
@@ -16,4 +15,3 @@
 #endif
 
 #define ARRAY_SIZE(X) (sizeof(X) / sizeof((X)[0]))
-

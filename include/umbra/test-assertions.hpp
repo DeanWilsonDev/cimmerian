@@ -1,5 +1,6 @@
 #pragma once
-#include "umbra/test_runner.h"
+#include "umbra/test-fail-handler-registry.hpp"
+#include "umbra/test-runner.hpp"
 #include <algorithm>
 #include <iostream>
 #include <cstddef>
@@ -18,7 +19,7 @@ concept Iterable = requires(T t) {
 inline void fail(const char* file, int line, const char* msg)
 {
   std::cerr << file << ":" << line << ": ASSERTION FAILED: - " << msg << "\n";
-  test_runner_test_fail(file, line, "");
+  TestFailHandlerRegistry::GetInstance().NotifyTestFail(file, line, "");
 }
 
 // -------- Scalars ---------

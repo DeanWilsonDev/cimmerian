@@ -3,22 +3,24 @@ cmake_minimum_required(VERSION 3.25)
 project(
   UmbraTest
   VERSION 1.0.0
-  LANGUAGES C)
+  LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # -------------------------
 # Library target
 # -------------------------
-add_library(
-  umbra_test STATIC src/test_case.c src/test_group.c src/test_registry.c
-                    src/test_container.c src/test_runner.c)
+add_library(umbra_test STATIC src/test-group.cpp src/test-registry.cpp
+                              src/test-runner.cpp)
 
 target_include_directories(
   umbra_test PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                     $<INSTALL_INTERFACE:include>)
 
-target_compile_features(umbra_test PUBLIC c_std_99)
+target_compile_features(umbra_test PUBLIC cxx_std_20)
 set_target_properties(umbra_test PROPERTIES C_EXTENSIONS OFF)
 
 # -------------------------
@@ -75,7 +77,7 @@ option(UMBRATEST_BUILD_TESTS "Build UmbraTest tests" ON)
 
 if(UMBRATEST_BUILD_TESTS)
   enable_language(CXX)
-  add_executable(test_UmbraTest test/test_main.cpp test/example.test.cpp)
+  add_executable(test_UmbraTest test/test-main.cpp test/example.test.cpp)
   target_link_libraries(test_UmbraTest PRIVATE umbra_test)
 
   # tests are C++

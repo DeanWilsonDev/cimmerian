@@ -1,5 +1,4 @@
-#include "umbra/test_cpp.hpp"
-#include <umbra/test.h>
+#include "umbra/test.hpp"
 
 DESCRIBE("Example Test", {
   DESCRIBE("Math", { TEST("Add", { ASSERT_EQUAL(1, 1); }); });
