@@ -38,4 +38,5 @@ private:
   bool isFailure;
   int totalFailures;
 };
+
 } // namespace Umbra::Test
