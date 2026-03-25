@@ -2,13 +2,28 @@
 #include "test-registry.hpp"
 #include "i-test-fail-handler.hpp"
 #include <cstddef>
+#include <chrono>
+#include <string>
 
 namespace Umbra::Test {
 
+using TestDuration = std::chrono::duration<double, std::milli>;
+
+struct TestCaseTimingResult {
+  std::string groupName;
+  std::string testName;
+  TestDuration elapsedTime;
+};
+
 struct TestRunSummary {
-  int total;
-  int passed;
-  int failed;
+  int total = 0;
+  int passed = 0;
+  int failed = 0;
+  TestDuration totalElapsedTime {0};
+  TestDuration slowestTestElapsedTime {0};
+  std::string slowestTestGroupName;
+  std::string slowestTestName;
+  std::vector<TestCaseTimingResult> perTestTimings;
 };
 
 class TestRunner : public ITestFailHandler {
