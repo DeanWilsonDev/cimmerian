@@ -45,7 +45,7 @@ void TestRunner::OnTestFail(const char* file, int line, const char* msg)
 
   this->isFailure = true;
   this->totalFailures++;
-  TEST_LOG_PRINT(LogColor::Red, {}, "[FAIL] {}:{} {}", file, line, msg);
+  TEST_LOG_PRINT(LogColor::Red, "[FAIL] {}:{} {}", file, line, msg);
 }
 
 void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSummary* summary)
@@ -82,14 +82,14 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
   if (this->isFailure) {
     summary->failed++;
     TEST_LOG_PRINT(
-        LogColor::Red, {}, "[FAIL] [{}] {}  ({:.4f}ms)", CheckGroupName(group->GetName()),
+        LogColor::Red, "[FAIL] [{}] {}  ({:.4f}ms)", CheckGroupName(group->GetName()),
         test->GetName(), elapsedTime.count()
     );
   }
   else {
     summary->passed++;
     TEST_LOG_PRINT(
-        LogColor::Green, {}, "[PASS] [{}] {}  ({:.4f}ms)", CheckGroupName(group->GetName()),
+        LogColor::Green, "[PASS] [{}] {}  ({:.4f}ms)", CheckGroupName(group->GetName()),
         test->GetName(), elapsedTime.count()
     );
   }
@@ -107,7 +107,7 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
   );
 #else
   if (strcmp(group->GetName(), "ROOT")) {
-    TEST_LOG_PRINT(LogColor::Cyan, {}, "[{}]", group->GetName());
+    TEST_LOG_PRINT(LogColor::Cyan, "[{}]", group->GetName());
   }
 #endif
 
@@ -132,8 +132,7 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
 
   if (strcmp(group->GetName(), "ROOT") != 0) {
     TEST_LOG_PRINT(
-        LogColor::Yellow, {}, "[{}] group total: {:.4f}ms", group->GetName(),
-        groupElapsedTime.count()
+        LogColor::Yellow, "[{}] group total: {:.4f}ms", group->GetName(), groupElapsedTime.count()
     );
   }
 
@@ -163,7 +162,7 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
 
   // Print summary
   std::printf("\n");
-  TEST_LOG_PRINT(LogColor::Default, {}, "─────────────────────────────────");
+  std::printf("────────────────────────────────────────────────");
 
   std::printf(
       LOG_COLOR_CODE_DEFAULT "\nSummary: " LOG_COLOR_CODE_YELLOW "%d total" LOG_COLOR_CODE_DEFAULT
@@ -173,13 +172,14 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   );
 
   if (summary.total > 0) {
-    TEST_LOG_PRINT(
-        LogColor::Yellow, {}, "Slowest: [{}] {} ({:.4f}ms)", summary.slowestTestGroupName,
-        summary.slowestTestName, summary.slowestTestElapsedTime.count()
+    std::printf(
+        LOG_COLOR_CODE_YELLOW "Slowest: [%s] %s (%.4fms)\n" LOG_COLOR_CODE_DEFAULT,
+        summary.slowestTestGroupName.c_str(), summary.slowestTestName.c_str(),
+        summary.slowestTestElapsedTime.count()
     );
   }
 
-  TEST_LOG_PRINT(LogColor::Default, {}, "─────────────────────────────────");
+  std::printf("────────────────────────────────────────────────\n");
 
   return summary;
 }

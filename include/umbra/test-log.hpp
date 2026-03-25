@@ -75,20 +75,14 @@ struct TestLogPrintLocation {
 };
 
 template <typename... Args>
-UMBRA_MAYBE_UNUSED inline void TestLogPrint(
-    LogColor color,
-    TestLogPrintLocation locationCapture,
-    std::format_string<Args...> formatString,
-    Args&&... args
-)
+UMBRA_MAYBE_UNUSED inline void
+TestLogPrint(LogColor color, std::format_string<Args...> formatString, Args&&... args)
 {
   auto formattedMessage = std::format(formatString, std::forward<Args>(args)...);
   if (color != LogColor::Default) {
     std::fputs(GetAnsiCode(color).data(), stdout);
   }
-  std::fprintf(
-      stdout, "[%s:%d] ", locationCapture.location.file_name(), locationCapture.location.line()
-  );
+
   std::fputs(formattedMessage.c_str(), stdout);
   std::fputc('\n', stdout);
   if (color != LogColor::Default) {
@@ -98,9 +92,9 @@ UMBRA_MAYBE_UNUSED inline void TestLogPrint(
 
 } // namespace Umbra::Test::Log
 
-#define TEST_LOG_PRINT(color, loc, fmt, ...)                                                       \
+#define TEST_LOG_PRINT(color, fmt, ...)                                                            \
   do {                                                                                             \
-    Umbra::Test::Log::TestLogPrint(color, loc, fmt __VA_OPT__(, ) __VA_ARGS__);                    \
+    Umbra::Test::Log::TestLogPrint(color, fmt __VA_OPT__(, ) __VA_ARGS__);                         \
   } while (0)
 
 #define TAG_INFO "[INFO] "
@@ -109,13 +103,13 @@ UMBRA_MAYBE_UNUSED inline void TestLogPrint(
 #define TAG_DEBUG "[DEBUG] "
 
 #define TEST_LOG_INFO(fmt, ...)                                                                    \
-  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Default, {}, TAG_INFO fmt __VA_OPT__(, ) __VA_ARGS__)
+  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Default, TAG_INFO fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define TEST_LOG_WARN(fmt, ...)                                                                    \
-  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Yellow, {}, TAG_WARN fmt __VA_OPT__(, ) __VA_ARGS__)
+  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Yellow, TAG_WARN fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define TEST_LOG_ERROR(fmt, ...)                                                                   \
-  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Red, {}, TAG_ERROR fmt __VA_OPT__(, ) __VA_ARGS__)
+  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Red, TAG_ERROR fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define TEST_LOG_DEBUG(fmt, ...)                                                                   \
-  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Magenta, {}, TAG_DEBUG fmt __VA_OPT__(, ) __VA_ARGS__)
+  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Magenta, TAG_DEBUG fmt __VA_OPT__(, ) __VA_ARGS__)
