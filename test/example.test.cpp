@@ -10,7 +10,7 @@ DESCRIBE("Example Test", {
       ASSERT_EQUAL(arr1, arr2);
     });
     TEST("Compare Vectors", {
-      std::vector<int> arr1 = {1, 2};
+      std::vector<int> arr1 = {1, 2, 3};
       std::vector<int> arr2 = {1, 2};
 
       ASSERT_EQUAL(arr1, arr2);
