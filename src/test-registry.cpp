@@ -1,6 +1,6 @@
-#include "umbra/test-registry.hpp"
-#include "umbra/test-case.hpp"
-#include "umbra/test-group.hpp"
+#include "cimmerian/test-registry.hpp"
+#include "cimmerian/test-case.hpp"
+#include "cimmerian/test-group.hpp"
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -79,7 +79,7 @@ void TestRegistry::RegisterTest(
 )
 {
   if (!group) {
-    std::fprintf(stderr, "UmbraTest: attempted to register test '%s' with NULL group\n", testName);
+    std::fprintf(stderr, "cimmerianTest: attempted to register test '%s' with NULL group\n", testName);
     std::abort();
   }
 

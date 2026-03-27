@@ -1,7 +1,7 @@
 #pragma once
 
-#include "umbra/test-runner.hpp"
-#include "umbra/test-debug.hpp"
+#include "cimmerian/test-runner.hpp"
+#include "cimmerian/test-debug.hpp"
 
 int main(int argc, char* argv[])
 {

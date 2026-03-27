@@ -1,44 +1,32 @@
 [
 {
-  "directory": "/Users/deanwilson/development/projects/UmbraTest/build",
-  "command": "/usr/bin/cc  -I/Users/deanwilson/development/projects/UmbraTest/include -std=c17 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/umbra_test.dir/src/test_case.c.o -c /Users/deanwilson/development/projects/UmbraTest/src/test_case.c",
-  "file": "/Users/deanwilson/development/projects/UmbraTest/src/test_case.c",
-  "output": "CMakeFiles/umbra_test.dir/src/test_case.c.o"
+  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
+  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-group.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/src/test-group.cpp",
+  "file": "/Users/deanwilson/development/projects/Cimmerian/src/test-group.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/test-group.cpp.o"
 },
 {
-  "directory": "/Users/deanwilson/development/projects/UmbraTest/build",
-  "command": "/usr/bin/cc  -I/Users/deanwilson/development/projects/UmbraTest/include -std=c17 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/umbra_test.dir/src/test_group.c.o -c /Users/deanwilson/development/projects/UmbraTest/src/test_group.c",
-  "file": "/Users/deanwilson/development/projects/UmbraTest/src/test_group.c",
-  "output": "CMakeFiles/umbra_test.dir/src/test_group.c.o"
+  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
+  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-registry.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/src/test-registry.cpp",
+  "file": "/Users/deanwilson/development/projects/Cimmerian/src/test-registry.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/test-registry.cpp.o"
 },
 {
-  "directory": "/Users/deanwilson/development/projects/UmbraTest/build",
-  "command": "/usr/bin/cc  -I/Users/deanwilson/development/projects/UmbraTest/include -std=c17 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/umbra_test.dir/src/test_registry.c.o -c /Users/deanwilson/development/projects/UmbraTest/src/test_registry.c",
-  "file": "/Users/deanwilson/development/projects/UmbraTest/src/test_registry.c",
-  "output": "CMakeFiles/umbra_test.dir/src/test_registry.c.o"
+  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
+  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-runner.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/src/test-runner.cpp",
+  "file": "/Users/deanwilson/development/projects/Cimmerian/src/test-runner.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/test-runner.cpp.o"
 },
 {
-  "directory": "/Users/deanwilson/development/projects/UmbraTest/build",
-  "command": "/usr/bin/cc  -I/Users/deanwilson/development/projects/UmbraTest/include -std=c17 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/umbra_test.dir/src/test_container.c.o -c /Users/deanwilson/development/projects/UmbraTest/src/test_container.c",
-  "file": "/Users/deanwilson/development/projects/UmbraTest/src/test_container.c",
-  "output": "CMakeFiles/umbra_test.dir/src/test_container.c.o"
+  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
+  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/test_Cimmerian.dir/test/test-main.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/test/test-main.cpp",
+  "file": "/Users/deanwilson/development/projects/Cimmerian/test/test-main.cpp",
+  "output": "CMakeFiles/test_Cimmerian.dir/test/test-main.cpp.o"
 },
 {
-  "directory": "/Users/deanwilson/development/projects/UmbraTest/build",
-  "command": "/usr/bin/cc  -I/Users/deanwilson/development/projects/UmbraTest/include -std=c17 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/umbra_test.dir/src/test_runner.c.o -c /Users/deanwilson/development/projects/UmbraTest/src/test_runner.c",
-  "file": "/Users/deanwilson/development/projects/UmbraTest/src/test_runner.c",
-  "output": "CMakeFiles/umbra_test.dir/src/test_runner.c.o"
-},
-{
-  "directory": "/Users/deanwilson/development/projects/UmbraTest/build",
-  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/UmbraTest/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/test_UmbraTest.dir/test/test_main.cpp.o -c /Users/deanwilson/development/projects/UmbraTest/test/test_main.cpp",
-  "file": "/Users/deanwilson/development/projects/UmbraTest/test/test_main.cpp",
-  "output": "CMakeFiles/test_UmbraTest.dir/test/test_main.cpp.o"
-},
-{
-  "directory": "/Users/deanwilson/development/projects/UmbraTest/build",
-  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/UmbraTest/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/test_UmbraTest.dir/test/example.test.cpp.o -c /Users/deanwilson/development/projects/UmbraTest/test/example.test.cpp",
-  "file": "/Users/deanwilson/development/projects/UmbraTest/test/example.test.cpp",
-  "output": "CMakeFiles/test_UmbraTest.dir/test/example.test.cpp.o"
+  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
+  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/test_Cimmerian.dir/test/example.test.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/test/example.test.cpp",
+  "file": "/Users/deanwilson/development/projects/Cimmerian/test/example.test.cpp",
+  "output": "CMakeFiles/test_Cimmerian.dir/test/example.test.cpp.o"
 }
 ]

@@ -22,7 +22,7 @@ inline TestGroup* _test_group = nullptr;
 /* ################################# */
 
 #define DESCRIBE(group_name, BODY)                                                                 \
-  UMBRA_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_desc_reg_, __COUNTER__) = []() {  \
+  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_desc_reg_, __COUNTER__) = []() {  \
     Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();                                         \
     TestGroup* _parent = (_test_group != nullptr) ? _test_group : _registry.GetRootGroup();        \
     TestGroup* _child = _registry.GetChildGroup(_parent, (group_name));                            \
@@ -65,7 +65,7 @@ inline TestGroup* _test_group = nullptr;
 /* ################################# */
 
 #define TEST(testName, ...)                                                                        \
-  UMBRA_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_test_body_reg_, __COUNTER__) =    \
+  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_test_body_reg_, __COUNTER__) =    \
       [=]() {                                                                                      \
         Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();                                     \
         TestGroup* _group = _test_group ? _test_group : _registry.GetRootGroup();                  \
@@ -81,7 +81,7 @@ inline TestGroup* _test_group = nullptr;
       }();
 
 #define TEST_FN(testName, FN)                                                                      \
-  UMBRA_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_test_fn_reg_, __COUNTER__) =      \
+  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_test_fn_reg_, __COUNTER__) =      \
       [=]() {                                                                                      \
         Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();                                     \
         TestGroup* _group = _test_group ? _test_group : _registry.GetRootGroup();                  \

@@ -75,7 +75,7 @@ struct TestLogPrintLocation {
 };
 
 template <typename... Args>
-UMBRA_MAYBE_UNUSED inline void
+CIMMERIAN_MAYBE_UNUSED inline void
 TestLogPrint(LogColor color, std::format_string<Args...> formatString, Args&&... args)
 {
   auto formattedMessage = std::format(formatString, std::forward<Args>(args)...);
@@ -94,7 +94,7 @@ TestLogPrint(LogColor color, std::format_string<Args...> formatString, Args&&...
 
 #define TEST_LOG_PRINT(color, fmt, ...)                                                            \
   do {                                                                                             \
-    Cimmerian::Log::TestLogPrint(color, fmt __VA_OPT__(, ) __VA_ARGS__);                         \
+    Cimmerian::Log::TestLogPrint(color, fmt __VA_OPT__(, ) __VA_ARGS__);                           \
   } while (0)
 
 #define TAG_INFO "[INFO] "
