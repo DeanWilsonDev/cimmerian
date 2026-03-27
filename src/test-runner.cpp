@@ -8,9 +8,9 @@
 #include <cstring>
 #include <cassert>
 
-namespace Umbra::Test {
+namespace Cimmerian {
 
-using namespace Umbra::Test::Log;
+using namespace Cimmerian::Log;
 
 void TestRunner::BeginContext(const char* groupName, const char* testName)
 {
@@ -183,4 +183,4 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
 
   return summary;
 }
-} // namespace Umbra::Test
+} // namespace Cimmerian

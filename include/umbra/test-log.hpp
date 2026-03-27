@@ -7,7 +7,7 @@
 #include <array>
 #include "test-macro-helpers.hpp"
 
-namespace Umbra::Test::Log {
+namespace Cimmerian::Log {
 
 #define LOG_COLOR_CODE_RED "\x1b[91m"
 #define LOG_COLOR_CODE_GREEN "\x1b[92m"
@@ -90,11 +90,11 @@ TestLogPrint(LogColor color, std::format_string<Args...> formatString, Args&&...
   }
 }
 
-} // namespace Umbra::Test::Log
+} // namespace Cimmerian::Log
 
 #define TEST_LOG_PRINT(color, fmt, ...)                                                            \
   do {                                                                                             \
-    Umbra::Test::Log::TestLogPrint(color, fmt __VA_OPT__(, ) __VA_ARGS__);                         \
+    Cimmerian::Log::TestLogPrint(color, fmt __VA_OPT__(, ) __VA_ARGS__);                         \
   } while (0)
 
 #define TAG_INFO "[INFO] "
@@ -103,13 +103,13 @@ TestLogPrint(LogColor color, std::format_string<Args...> formatString, Args&&...
 #define TAG_DEBUG "[DEBUG] "
 
 #define TEST_LOG_INFO(fmt, ...)                                                                    \
-  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Default, TAG_INFO fmt __VA_OPT__(, ) __VA_ARGS__)
+  TEST_LOG_PRINT(::Cimmerian::Log::LogColor::Default, TAG_INFO fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define TEST_LOG_WARN(fmt, ...)                                                                    \
-  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Yellow, TAG_WARN fmt __VA_OPT__(, ) __VA_ARGS__)
+  TEST_LOG_PRINT(::Cimmerian::Log::LogColor::Yellow, TAG_WARN fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define TEST_LOG_ERROR(fmt, ...)                                                                   \
-  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Red, TAG_ERROR fmt __VA_OPT__(, ) __VA_ARGS__)
+  TEST_LOG_PRINT(::Cimmerian::Log::LogColor::Red, TAG_ERROR fmt __VA_OPT__(, ) __VA_ARGS__)
 
 #define TEST_LOG_DEBUG(fmt, ...)                                                                   \
-  TEST_LOG_PRINT(::Umbra::Test::Log::LogColor::Magenta, TAG_DEBUG fmt __VA_OPT__(, ) __VA_ARGS__)
+  TEST_LOG_PRINT(::Cimmerian::Log::LogColor::Magenta, TAG_DEBUG fmt __VA_OPT__(, ) __VA_ARGS__)

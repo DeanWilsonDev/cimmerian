@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-namespace Umbra::Test {
+namespace Cimmerian {
 
 class AnsiFormatter {
 public:
@@ -62,4 +62,4 @@ public:
   static std::string ReceivedPrefix() { return Red("-"); }
 };
 
-} // namespace Umbra::Test
+} // namespace Cimmerian

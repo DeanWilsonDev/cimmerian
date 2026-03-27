@@ -5,7 +5,7 @@
 #include "test-case.hpp"
 #include "test-group.hpp"
 
-namespace Umbra::Test {
+namespace Cimmerian {
 
 class TestRegistry {
 public:
@@ -67,4 +67,4 @@ private:
 
   char* StoreString(const char* str);
 };
-} // namespace Umbra::Test
+} // namespace Cimmerian

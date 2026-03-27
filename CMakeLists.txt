@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(
-  UmbraTest
+  Cimmerian
   VERSION 1.0.0
   LANGUAGES CXX)
 
@@ -13,21 +13,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # -------------------------
 # Library target
 # -------------------------
-add_library(umbra_test STATIC src/test-group.cpp src/test-registry.cpp
+add_library(cimmerian STATIC src/test-group.cpp src/test-registry.cpp
                               src/test-runner.cpp)
 
 target_include_directories(
-  umbra_test PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  cimmerian PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                     $<INSTALL_INTERFACE:include>)
 
-target_compile_features(umbra_test PUBLIC cxx_std_20)
-set_target_properties(umbra_test PROPERTIES C_EXTENSIONS OFF)
+target_compile_features(cimmerian PUBLIC cxx_std_20)
+set_target_properties(cimmerian PROPERTIES C_EXTENSIONS OFF)
 
 # -------------------------
 # Output dirs (optional)
 # -------------------------
 set_target_properties(
-  umbra_test
+  cimmerian
   PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
              LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
              RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
@@ -35,7 +35,7 @@ set_target_properties(
 foreach(OUTPUTCONFIG Debug Release RelWithDebInfo MinSizeRel)
   string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG_UPPER)
   set_target_properties(
-    umbra_test
+    cimmerian
     PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER}
                "${CMAKE_BINARY_DIR}/lib/${OUTPUTCONFIG}"
                LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER}
@@ -48,16 +48,16 @@ endforeach()
 # Warnings
 # -------------------------
 if(MSVC)
-  target_compile_options(umbra_test PRIVATE /W4)
+  target_compile_options(cimmerian PRIVATE /W4)
 else()
-  target_compile_options(umbra_test PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(cimmerian PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # -------------------------
 # Build define for shared
 # -------------------------
 if(BUILD_SHARED_LIBS)
-  target_compile_definitions(umbra_test PRIVATE UMBRA_BUILD_DLL)
+  target_compile_definitions(cimmerian PRIVATE UMBRA_BUILD_DLL)
 endif()
 
 # -------------------------
@@ -73,20 +73,20 @@ endif()
 # -------------------------
 # Test executable
 # -------------------------
-option(UMBRATEST_BUILD_TESTS "Build UmbraTest tests" ON)
+option(CIMMERIAN_BUILD_TESTS "Build Cimmerian tests" ON)
 
-if(UMBRATEST_BUILD_TESTS)
+if(CIMMERIAN_BUILD_TESTS)
   enable_language(CXX)
-  add_executable(test_UmbraTest test/test-main.cpp test/example.test.cpp)
-  target_link_libraries(test_UmbraTest PRIVATE umbra_test)
+  add_executable(test_Cimmerian test/test-main.cpp test/example.test.cpp)
+  target_link_libraries(test_Cimmerian PRIVATE cimmerian)
 
   # tests are C++
-  target_compile_features(test_UmbraTest PRIVATE cxx_std_20)
+  target_compile_features(test_Cimmerian PRIVATE cxx_std_20)
 
   if(MSVC)
-    target_compile_options(test_UmbraTest PRIVATE /W4 /EHsc)
+    target_compile_options(test_Cimmerian PRIVATE /W4 /EHsc)
   else()
-    target_compile_options(test_UmbraTest PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(test_Cimmerian PRIVATE -Wall -Wextra -Wpedantic)
   endif()
 endif()
 
@@ -96,8 +96,8 @@ endif()
 include(GNUInstallDirs)
 
 install(
-  TARGETS umbra_test
-  EXPORT UmbraTestTargets
+  TARGETS cimmerian
+  EXPORT CimmerianTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -105,7 +105,7 @@ install(
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 install(
-  EXPORT UmbraTestTargets
-  FILE UmbraTestTargets.cmake
-  NAMESPACE Umbra::
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/UmbraTest)
+  EXPORT CimmerianTargets
+  FILE CimmerianTargets.cmake
+  NAMESPACE Cimmerian::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Cimmerian)

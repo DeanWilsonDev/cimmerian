@@ -1,7 +1,7 @@
 #pragma once
 #include <string_view>
 
-namespace Umbra::Test {
+namespace Cimmerian {
 inline bool g_UmbraTestDebugEnabled = false;
 
 inline void CheckDebug(int argc, char* argv[])
@@ -14,4 +14,4 @@ inline void CheckDebug(int argc, char* argv[])
   }
 }
 
-} // namespace Umbra::Test
+} // namespace Cimmerian

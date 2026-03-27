@@ -3,7 +3,7 @@
 #include "i-test-fail-handler.hpp"
 #include <iostream>
 
-namespace Umbra::Test {
+namespace Cimmerian {
 
 class TestFailHandlerRegistry {
 
@@ -37,4 +37,4 @@ private:
   ITestFailHandler* activeHandler = nullptr;
 };
 
-} // namespace Umbra::Test
+} // namespace Cimmerian

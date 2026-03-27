@@ -9,7 +9,7 @@
 #include <format>
 #include <span>
 
-namespace Umbra::Test::Assertions {
+namespace Cimmerian::Assertions {
 
 template <typename T>
 concept Formattable = requires(T t) {
@@ -257,4 +257,4 @@ void assert_not_equal(const A& expected, const B& received, const char* file, in
     }
 }
 
-} // namespace Umbra::Test::Assertions
+} // namespace Cimmerian::Assertions

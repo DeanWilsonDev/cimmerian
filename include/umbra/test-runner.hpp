@@ -5,7 +5,7 @@
 #include <chrono>
 #include <string>
 
-namespace Umbra::Test {
+namespace Cimmerian {
 
 using TestDuration = std::chrono::duration<double, std::milli>;
 
@@ -54,4 +54,4 @@ private:
   int totalFailures;
 };
 
-} // namespace Umbra::Test
+} // namespace Cimmerian

@@ -6,7 +6,7 @@
 #include <cstring>
 #include <iostream>
 
-namespace Umbra::Test {
+namespace Cimmerian {
 
 static TestGroup* FindGroup(TestGroup* parent, const char* groupName)
 {
@@ -145,4 +145,4 @@ void TestRegistry::SetAfterAll(
 {
   SetHook(group, &TestGroup::SetAfterAll, fn, hookUser, hookTeardown);
 }
-} // namespace Umbra::Test
+} // namespace Cimmerian
