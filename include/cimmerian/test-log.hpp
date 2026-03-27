@@ -5,18 +5,10 @@
 #include <cstdarg>
 #include <string_view>
 #include <array>
+#include "cimmerian/ansi-codes.hpp"
 #include "test-macro-helpers.hpp"
 
 namespace Cimmerian::Log {
-
-#define LOG_COLOR_CODE_RED "\x1b[91m"
-#define LOG_COLOR_CODE_GREEN "\x1b[92m"
-#define LOG_COLOR_CODE_YELLOW "\x1b[93m"
-#define LOG_COLOR_CODE_BLUE "\x1b[94m"
-#define LOG_COLOR_CODE_MAGENTA "\x1b[95m"
-#define LOG_COLOR_CODE_CYAN "\x1b[96m"
-#define LOG_COLOR_CODE_WHITE "\x1b[97m"
-#define LOG_COLOR_CODE_DEFAULT "\x1b[0m"
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -41,7 +33,7 @@ inline const bool g_VtEnabled = true;
 #endif
 
 enum class LogColor : unsigned {
-  Default = 0,
+  Reset = 0,
   Red = 1,
   Green = 2,
   Yellow = 3,
@@ -51,14 +43,20 @@ enum class LogColor : unsigned {
   White = 7,
 };
 
-constexpr std::array<std::string_view, 8> g_AnsiCodes = {
-    LOG_COLOR_CODE_DEFAULT, LOG_COLOR_CODE_RED,     LOG_COLOR_CODE_GREEN, LOG_COLOR_CODE_YELLOW,
-    LOG_COLOR_CODE_BLUE,    LOG_COLOR_CODE_MAGENTA, LOG_COLOR_CODE_CYAN,  LOG_COLOR_CODE_WHITE
+constexpr std::array<std::string_view, 8> g_ansiCodeLookupTable = {
+    Ansi::ANSI_RESET,
+    Ansi::ANSI_COLOR_BRIGHT_RED,
+    Ansi::ANSI_COLOR_BRIGHT_GREEN,
+    Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+    Ansi::ANSI_COLOR_BRIGHT_BLUE,
+    Ansi::ANSI_COLOR_BRIGHT_MAGENTA,
+    Ansi::ANSI_COLOR_BRIGHT_CYAN,
+    Ansi::ANSI_COLOR_BRIGHT_WHITE,
 };
 
 constexpr std::string_view GetAnsiCode(LogColor color)
 {
-  return g_AnsiCodes[static_cast<std::size_t>(color)];
+  return g_ansiCodeLookupTable[static_cast<std::size_t>(color)];
 }
 
 struct TestLogPrintLocation {
@@ -79,14 +77,14 @@ CIMMERIAN_MAYBE_UNUSED inline void
 TestLogPrint(LogColor color, std::format_string<Args...> formatString, Args&&... args)
 {
   auto formattedMessage = std::format(formatString, std::forward<Args>(args)...);
-  if (color != LogColor::Default) {
+  if (color != LogColor::Reset) {
     std::fputs(GetAnsiCode(color).data(), stdout);
   }
 
   std::fputs(formattedMessage.c_str(), stdout);
   std::fputc('\n', stdout);
-  if (color != LogColor::Default) {
-    std::fputs(GetAnsiCode(LogColor::Default).data(), stdout);
+  if (color != LogColor::Reset) {
+    std::fputs(GetAnsiCode(LogColor::Reset).data(), stdout);
   }
 }
 

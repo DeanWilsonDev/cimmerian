@@ -1,4 +1,6 @@
 #include "cimmerian/test-runner.hpp"
+#include "cimmerian/ansi-codes.hpp"
+#include "cimmerian/ansi-text-builder.hpp"
 #include "cimmerian/test-fail-handler-registry.hpp"
 #include "cimmerian/test-group.hpp"
 #include "cimmerian/test-log.hpp"
@@ -38,8 +40,8 @@ void TestRunner::OnTestFail(const char* file, int line, const char* msg)
 {
   if (!this->inTest) {
     std::fprintf(
-        stderr, LOG_COLOR_CODE_RED TAG_ERROR "%s:%d: test failure outside of running test: %s\n",
-        file, line, msg
+        stderr, "%s" TAG_ERROR "%s:%d: test failure outside of running test: %s\n",
+        Ansi::ANSI_COLOR_BRIGHT_RED, file, line, msg
     );
   }
 
@@ -165,15 +167,14 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   std::printf("────────────────────────────────────────────────");
 
   std::printf(
-      LOG_COLOR_CODE_DEFAULT "\nSummary: " LOG_COLOR_CODE_YELLOW "%d total" LOG_COLOR_CODE_DEFAULT
-                             ", " LOG_COLOR_CODE_GREEN "%d passed" LOG_COLOR_CODE_DEFAULT
-                             ", " LOG_COLOR_CODE_RED "%d failed\n\n" LOG_COLOR_CODE_DEFAULT,
-      summary.total, summary.passed, summary.failed
+      "\nSummary: %s%d total%s, %s%d passed%s, %s%d failed\n\n%s", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+      summary.total, Ansi::ANSI_RESET, Ansi::ANSI_COLOR_BRIGHT_GREEN, summary.passed,
+      Ansi::ANSI_RESET, Ansi::ANSI_COLOR_BRIGHT_RED, summary.failed, Ansi::ANSI_RESET
   );
 
   if (summary.total > 0) {
     std::printf(
-        LOG_COLOR_CODE_YELLOW "Slowest: [%s] %s (%.4fms)\n" LOG_COLOR_CODE_DEFAULT,
+        "%sSlowest: [%s] %s (%.4fms)\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
         summary.slowestTestGroupName.c_str(), summary.slowestTestName.c_str(),
         summary.slowestTestElapsedTime.count()
     );
