@@ -1,5 +1,7 @@
 # Cimmerian
 
+<img src="assets/docs/cimmerian-logo.svg" width="500"/>
+
 A modern C++20 unit testing framework. BDD-style test authoring, visual diff output on failure, and built-in performance timing — with zero external dependencies.
 
 ```
