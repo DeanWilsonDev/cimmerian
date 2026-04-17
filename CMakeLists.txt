@@ -109,3 +109,23 @@ install(
   FILE CimmerianTargets.cmake
   NAMESPACE Cimmerian::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Cimmerian)
+
+# -------------------------
+# Package config (enables find_package)
+# -------------------------
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/CimmerianConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/CimmerianConfig.cmake"
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Cimmerian)
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/CimmerianConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion)
+
+install(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/CimmerianConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/CimmerianConfigVersion.cmake"
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Cimmerian)

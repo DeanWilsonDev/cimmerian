@@ -1,0 +1,7 @@
+# CimmerianConfig.cmake.in
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+include("${CMAKE_CURRENT_LIST_DIR}/CimmerianTargets.cmake")
+
+check_required_components(Cimmerian)
