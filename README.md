@@ -54,6 +54,14 @@ target_link_libraries(my_tests PRIVATE cimmerian)
 target_compile_features(my_tests PUBLIC cxx_std_20)
 ```
 
+Install locally as library:
+
+```
+cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local -DCIMMERIAN_BUILD_TESTS=OFF
+cmake --build build
+cmake --install build
+```
+
 ---
 
 ## Quick Start
