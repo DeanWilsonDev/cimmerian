@@ -57,7 +57,7 @@ endif()
 # Build define for shared
 # -------------------------
 if(BUILD_SHARED_LIBS)
-  target_compile_definitions(cimmerian PRIVATE UMBRA_BUILD_DLL)
+  target_compile_definitions(cimmerian PRIVATE CIMMERIAN_BUILD_DLL)
 endif()
 
 # -------------------------
