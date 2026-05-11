@@ -24,6 +24,14 @@ target_compile_features(cimmerian PUBLIC cxx_std_20)
 set_target_properties(cimmerian PROPERTIES C_EXTENSIONS OFF)
 
 # -------------------------
+# Install Dependencies
+# -------------------------
+
+# This creates a circular dependency. A separate module needs to be responsible for test coverage.
+# add_subdirectory(external/amanuensis)
+# target_link_libraries(${PROJECT_NAME} PRIVATE amanuensis)
+
+# -------------------------
 # Output dirs (optional)
 # -------------------------
 set_target_properties(
