@@ -26,3 +26,8 @@ log/*
 *~
 *.tmp
 *.cache/*
+
+# Visual regression: goldens are committed, ephemeral failure artifacts are not
+*.actual.png
+*.diff.png
+visual-report.html

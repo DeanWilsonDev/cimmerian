@@ -94,3 +94,6 @@ private:
 };
 
 const char* CheckGroupName(const char* groupName);
+
+// Builds "Group > Subgroup > ..." from a group up to (excluding) the ROOT group.
+std::string BuildGroupPath(const TestGroup* group);

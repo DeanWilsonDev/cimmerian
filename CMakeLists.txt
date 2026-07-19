@@ -13,23 +13,75 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # -------------------------
 # Library target
 # -------------------------
-add_library(cimmerian STATIC src/test-group.cpp src/test-registry.cpp
-                             src/test-runner.cpp)
+add_library(
+  cimmerian STATIC
+  src/test-group.cpp
+  src/test-registry.cpp
+  src/test-runner.cpp
+  src/snapshot/snapshot-key.cpp
+  src/snapshot/snapshot-run-mode.cpp
+  src/snapshot/string-snapshot-store.cpp
+  src/snapshot/hash-snapshot-store.cpp
+  src/snapshot/inline-snapshot-rewriter.cpp
+  src/visual/stb-impl.cpp
+  src/visual/active-registries.cpp
+  src/visual/screenshot.cpp
+  src/visual/image-diff.cpp
+  src/visual/snapshot-store.cpp
+  src/visual/visual-test-registry.cpp
+  src/visual/visual-test-runner.cpp)
 
 target_include_directories(
   cimmerian PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                   $<INSTALL_INTERFACE:include>)
+                    $<INSTALL_INTERFACE:include>)
+target_include_directories(cimmerian PRIVATE src/visual)
 
 target_compile_features(cimmerian PUBLIC cxx_std_20)
 set_target_properties(cimmerian PROPERTIES C_EXTENSIONS OFF)
 
 # -------------------------
-# Install Dependencies
+# Visual regression: platform capture/injection
 # -------------------------
+# CIMMERIAN_VISUAL_PLATFORM lets consumers override platform autodetection
+# (e.g. cross-compiling). Valid values: X11, Win32, macOS, None.
+if(WIN32)
+  set(_CIMMERIAN_VISUAL_PLATFORM_DEFAULT "Win32")
+elseif(APPLE)
+  set(_CIMMERIAN_VISUAL_PLATFORM_DEFAULT "macOS")
+elseif(UNIX)
+  set(_CIMMERIAN_VISUAL_PLATFORM_DEFAULT "X11")
+else()
+  set(_CIMMERIAN_VISUAL_PLATFORM_DEFAULT "None")
+endif()
 
-# This creates a circular dependency. A separate module needs to be responsible for test coverage.
-# add_subdirectory(external/amanuensis)
-# target_link_libraries(${PROJECT_NAME} PRIVATE amanuensis)
+set(CIMMERIAN_VISUAL_PLATFORM
+    "${_CIMMERIAN_VISUAL_PLATFORM_DEFAULT}"
+    CACHE STRING "Visual regression platform backend (X11, Win32, macOS, None)")
+set_property(CACHE CIMMERIAN_VISUAL_PLATFORM PROPERTY STRINGS X11 Win32 macOS
+                                                        None)
+
+if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11")
+  find_package(X11 REQUIRED)
+  if(NOT X11_XTest_FOUND)
+    message(FATAL_ERROR "Cimmerian visual regression needs libXtst (X11 XTEST extension) headers/libs")
+  endif()
+
+  target_sources(cimmerian PRIVATE src/visual/platform/x11-screen-capture.cpp
+                                    src/visual/platform/x11-event-injector.cpp)
+  target_include_directories(cimmerian PRIVATE ${X11_INCLUDE_DIR})
+  target_link_libraries(cimmerian PRIVATE ${X11_LIBRARIES} ${X11_Xtst_LIB})
+
+elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "Win32")
+  target_sources(cimmerian PRIVATE src/visual/platform/win32-screen-capture.cpp
+                                    src/visual/platform/win32-event-injector.cpp)
+  target_link_libraries(cimmerian PRIVATE user32 gdi32)
+
+elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "macOS")
+  target_sources(cimmerian PRIVATE src/visual/platform/macos-screen-capture.cpp
+                                    src/visual/platform/macos-event-injector.cpp)
+  find_library(APPLICATION_SERVICES_FRAMEWORK ApplicationServices REQUIRED)
+  target_link_libraries(cimmerian PRIVATE ${APPLICATION_SERVICES_FRAMEWORK})
+endif()
 
 # -------------------------
 # Output dirs (optional)
@@ -85,8 +137,15 @@ option(CIMMERIAN_BUILD_TESTS "Build cimmerian tests" ON)
 
 if(CIMMERIAN_BUILD_TESTS)
   enable_language(CXX)
-  add_executable(test_cimmerian test/test-main.cpp test/example.test.cpp)
+  add_executable(test_cimmerian test/test-main.cpp test/example.test.cpp
+                                 test/snapshot.test.cpp test/visual.test.cpp)
   target_link_libraries(test_cimmerian PRIVATE cimmerian)
+
+  if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11")
+    # test/visual.test.cpp creates its own scratch X11 window to screenshot.
+    target_include_directories(test_cimmerian PRIVATE ${X11_INCLUDE_DIR})
+    target_link_libraries(test_cimmerian PRIVATE ${X11_LIBRARIES})
+  endif()
 
   # tests are C++
   target_compile_features(test_cimmerian PRIVATE cxx_std_20)

@@ -24,6 +24,13 @@ struct TestRunSummary {
   std::string slowestTestGroupName;
   std::string slowestTestName;
   std::vector<TestCaseTimingResult> perTestTimings;
+
+  // Snapshot testing extension (string / inline / hash snapshots)
+  int snapshotsMatched = 0;
+  int snapshotsFailed = 0;
+  int snapshotsUpdated = 0;
+  int snapshotsMissing = 0;
+  int inlineRewriteCount = 0;
 };
 
 class TestRunner : public ITestFailHandler {
@@ -43,15 +50,24 @@ public:
   bool IsInTest() const { return this->inTest; }
   const char* GetCurrentGroup() const { return this->currentGroup; }
   const char* GetCurrentTest() const { return this->currentTest; }
+  const std::string& GetCurrentGroupPath() const { return this->currentGroupPath; }
   bool IsFailure() const { return this->isFailure; }
   int GetTotalFailures() const { return this->totalFailures; }
+
+  // The most recently constructed TestRunner. Lets extensions (snapshot
+  // macros, visual macros) reach the running test's context without every
+  // extension needing its own registry of the active runner.
+  static TestRunner* GetActive() { return activeInstance; }
 
 private:
   bool inTest;
   const char* currentGroup;
   const char* currentTest;
+  std::string currentGroupPath;
   bool isFailure;
   int totalFailures;
+
+  static inline TestRunner* activeInstance = nullptr;
 };
 
 } // namespace Cimmerian

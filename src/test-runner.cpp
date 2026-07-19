@@ -1,6 +1,10 @@
 #include "cimmerian/test-runner.hpp"
 #include "cimmerian/ansi-codes.hpp"
 #include "cimmerian/ansi-text-builder.hpp"
+#include "cimmerian/snapshot/hash-snapshot-store.hpp"
+#include "cimmerian/snapshot/inline-snapshot-rewriter.hpp"
+#include "cimmerian/snapshot/snapshot-run-mode.hpp"
+#include "cimmerian/snapshot/string-snapshot-store.hpp"
 #include "cimmerian/test-fail-handler-registry.hpp"
 #include "cimmerian/test-group.hpp"
 #include "cimmerian/test-log.hpp"
@@ -34,6 +38,7 @@ TestRunner::TestRunner()
     , totalFailures(0)
 {
   TestFailHandlerRegistry::GetInstance().RegisterHandler(this);
+  activeInstance = this;
 }
 
 void TestRunner::OnTestFail(const char* file, int line, const char* msg)
@@ -53,6 +58,7 @@ void TestRunner::OnTestFail(const char* file, int line, const char* msg)
 void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSummary* summary)
 {
   this->isFailure = false;
+  this->currentGroupPath = BuildGroupPath(group);
 
   this->BeginContext(group->GetName(), "(before_each)");
   group->ExecuteBeforeEach();
@@ -162,6 +168,17 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   auto suiteEndTime = std::chrono::high_resolution_clock::now();
   summary.totalElapsedTime = suiteEndTime - suiteStartTime;
 
+  Snapshot::InlineSnapshotRewriter::GetInstance().FlushAll();
+  Snapshot::StringSnapshotStore::GetInstance().Flush();
+  Snapshot::HashSnapshotStore::GetInstance().Flush();
+
+  const Snapshot::SnapshotSummary& snapshotSummary = Snapshot::SnapshotSummaryAccumulator::GetInstance().Get();
+  summary.snapshotsMatched = snapshotSummary.snapshotsMatched;
+  summary.snapshotsFailed = snapshotSummary.snapshotsFailed;
+  summary.snapshotsUpdated = snapshotSummary.snapshotsUpdated;
+  summary.snapshotsMissing = snapshotSummary.snapshotsMissing;
+  summary.inlineRewriteCount = snapshotSummary.inlineRewriteCount;
+
   // Print summary
   std::printf("\n");
   std::printf("────────────────────────────────────────────────");
@@ -181,6 +198,19 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   }
 
   std::printf("────────────────────────────────────────────────\n");
+
+  const int totalSnapshotActivity =
+      summary.snapshotsMatched + summary.snapshotsFailed + summary.snapshotsUpdated + summary.snapshotsMissing;
+  if (totalSnapshotActivity > 0) {
+    std::printf(
+        "Snapshots: %d matched, %d failed, %d updated, %d missing", summary.snapshotsMatched,
+        summary.snapshotsFailed, summary.snapshotsUpdated, summary.snapshotsMissing
+    );
+    if (summary.inlineRewriteCount > 0) {
+      std::printf(" (%d source file(s) rewritten)", summary.inlineRewriteCount);
+    }
+    std::printf("\n────────────────────────────────────────────────\n");
+  }
 
   return summary;
 }
