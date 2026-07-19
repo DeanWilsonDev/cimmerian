@@ -14,6 +14,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+  set(IS_ROOT_PROJECT ON)
+else()
+  set(IS_ROOT_PROJECT OFF)
+endif()
+
 # -------------------------
 # Library target
 # -------------------------
@@ -137,7 +143,14 @@ endif()
 # -------------------------
 # Test executable
 # -------------------------
-option(CIMMERIAN_BUILD_TESTS "Build cimmerian tests" ON)
+# Cimmerian is a dev/test dependency: when it's pulled in as a subdirectory
+# by another project (amanuensis, firefly, ...) we only want the library,
+# never cimmerian's own test executable.
+if(IS_ROOT_PROJECT)
+  option(CIMMERIAN_BUILD_TESTS "Build cimmerian tests" ON)
+else()
+  option(CIMMERIAN_BUILD_TESTS "Build cimmerian tests" OFF)
+endif()
 
 if(CIMMERIAN_BUILD_TESTS)
   enable_language(CXX)
