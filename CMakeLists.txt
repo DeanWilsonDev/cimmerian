@@ -53,7 +53,16 @@ set_target_properties(cimmerian PROPERTIES C_EXTENSIONS OFF)
 # Visual regression: platform capture/injection
 # -------------------------
 # CIMMERIAN_VISUAL_PLATFORM lets consumers override platform autodetection
-# (e.g. cross-compiling). Valid values: X11, Win32, macOS, None.
+# (e.g. cross-compiling). Valid values: X11, Linux-uinput, Win32, macOS, None.
+#
+# Linux-uinput reuses X11's screen capture (unaffected by the gap below) but
+# injects input via /dev/uinput instead of XTEST. XTEST-over-XWayland can
+# report success without actually reaching the compositor's input pipeline
+# on some Wayland compositors (see
+# docs/cimmerian_wayland_xtest_injection_gap.md); uinput operates at the
+# kernel input-device layer, below both X11 and Wayland, so it isn't subject
+# to that gap. It requires /dev/uinput access (root, or a udev rule granting
+# the `input` group), so it isn't the default even on Linux.
 if(WIN32)
   set(_CIMMERIAN_VISUAL_PLATFORM_DEFAULT "Win32")
 elseif(APPLE)
@@ -66,9 +75,9 @@ endif()
 
 set(CIMMERIAN_VISUAL_PLATFORM
     "${_CIMMERIAN_VISUAL_PLATFORM_DEFAULT}"
-    CACHE STRING "Visual regression platform backend (X11, Win32, macOS, None)")
-set_property(CACHE CIMMERIAN_VISUAL_PLATFORM PROPERTY STRINGS X11 Win32 macOS
-                                                        None)
+    CACHE STRING "Visual regression platform backend (X11, Linux-uinput, Win32, macOS, None)")
+set_property(CACHE CIMMERIAN_VISUAL_PLATFORM PROPERTY STRINGS X11 Linux-uinput
+                                                        Win32 macOS None)
 
 if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11")
   find_package(X11 REQUIRED)
@@ -80,17 +89,29 @@ if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11")
                                     src/visual/platform/x11-event-injector.cpp)
   target_include_directories(cimmerian PRIVATE ${X11_INCLUDE_DIR})
   target_link_libraries(cimmerian PRIVATE ${X11_LIBRARIES} ${X11_Xtst_LIB})
+  target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_X11)
+
+elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-uinput")
+  find_package(X11 REQUIRED)
+
+  target_sources(cimmerian PRIVATE src/visual/platform/x11-screen-capture.cpp
+                                    src/visual/platform/linux-uinput-event-injector.cpp)
+  target_include_directories(cimmerian PRIVATE ${X11_INCLUDE_DIR})
+  target_link_libraries(cimmerian PRIVATE ${X11_LIBRARIES})
+  target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT)
 
 elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "Win32")
   target_sources(cimmerian PRIVATE src/visual/platform/win32-screen-capture.cpp
                                     src/visual/platform/win32-event-injector.cpp)
   target_link_libraries(cimmerian PRIVATE user32 gdi32)
+  target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_WIN32)
 
 elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "macOS")
   target_sources(cimmerian PRIVATE src/visual/platform/macos-screen-capture.cpp
                                     src/visual/platform/macos-event-injector.cpp)
   find_library(APPLICATION_SERVICES_FRAMEWORK ApplicationServices REQUIRED)
   target_link_libraries(cimmerian PRIVATE ${APPLICATION_SERVICES_FRAMEWORK})
+  target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_MACOS)
 endif()
 
 # -------------------------
@@ -158,8 +179,9 @@ if(CIMMERIAN_BUILD_TESTS)
                                  test/snapshot.test.cpp test/visual.test.cpp)
   target_link_libraries(test_cimmerian PRIVATE cimmerian)
 
-  if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11")
-    # test/visual.test.cpp creates its own scratch X11 window to screenshot.
+  if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11" OR CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-uinput")
+    # test/visual.test.cpp creates its own scratch X11 window to screenshot
+    # (both platforms use X11ScreenCapture; only injection differs).
     target_include_directories(test_cimmerian PRIVATE ${X11_INCLUDE_DIR})
     target_link_libraries(test_cimmerian PRIVATE ${X11_LIBRARIES})
   endif()

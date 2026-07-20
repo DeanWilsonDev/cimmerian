@@ -11,13 +11,20 @@
 #include "visual/visual-test-registry.hpp"
 #include "visual/visual-test-runner.hpp"
 
-#if defined(_WIN32) || defined(_WIN64)
+// Selected by the CIMMERIAN_VISUAL_PLATFORM_* compile definitions CMake sets
+// based on the CIMMERIAN_VISUAL_PLATFORM cache variable, not raw OS macros -
+// that's what lets e.g. Linux-uinput opt out of the X11 event injector while
+// still building on a Linux/UNIX host.
+#if defined(CIMMERIAN_VISUAL_PLATFORM_WIN32)
 #include "visual/platform/win32-event-injector.hpp"
 #include "visual/platform/win32-screen-capture.hpp"
-#elif defined(__APPLE__)
+#elif defined(CIMMERIAN_VISUAL_PLATFORM_MACOS)
 #include "visual/platform/macos-event-injector.hpp"
 #include "visual/platform/macos-screen-capture.hpp"
-#elif defined(__unix__) || defined(__linux__)
+#elif defined(CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT)
+#include "visual/platform/linux-uinput-event-injector.hpp"
+#include "visual/platform/x11-screen-capture.hpp"
+#elif defined(CIMMERIAN_VISUAL_PLATFORM_X11)
 #include "visual/platform/x11-event-injector.hpp"
 #include "visual/platform/x11-screen-capture.hpp"
 #endif

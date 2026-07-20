@@ -107,6 +107,13 @@ void VisualTestRunner::SetCapture(std::shared_ptr<IScreenCapture> newCapture)
 
 void VisualTestRunner::SetInjector(std::shared_ptr<IEventInjector> newInjector)
 {
+  if (newInjector && !newInjector->IsFunctional()) {
+    TEST_LOG_WARN(
+        "VisualTestRunner: registered IEventInjector reports it is not "
+        "functional - SEND() in visual tests will silently no-op instead of "
+        "actually driving the UI, which can produce false passes."
+    );
+  }
   this->injector = newInjector;
   ActiveEventInjector::GetInstance().Set(newInjector);
 }
@@ -149,6 +156,13 @@ void VisualTestRunner::SendEvent(const UIEvent& event)
   if (!activeInjector) {
     TEST_LOG_ERROR("SEND: no IEventInjector registered (call VisualTestRunner::SetInjector first)");
     return;
+  }
+  if (!activeInjector->IsFunctional()) {
+    TEST_LOG_ERROR(
+        "SEND: active IEventInjector reports it is not functional - this "
+        "event is likely a no-op and any following ASSERT_SNAPSHOT may pass "
+        "against pre-existing UI state rather than the intended interaction"
+    );
   }
   activeInjector->Inject(event);
 }

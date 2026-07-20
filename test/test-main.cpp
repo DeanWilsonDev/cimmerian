@@ -14,9 +14,13 @@ int main(int argc, char* argv[])
 
   Cimmerian::Visual::VisualTestRunner visualRunner;
   visualRunner.ParseArgs(argc, argv);
-#if defined(__unix__) || defined(__linux__)
+#if defined(CIMMERIAN_VISUAL_PLATFORM_X11) || defined(CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT)
   visualRunner.SetCapture(std::make_shared<Cimmerian::Visual::X11ScreenCapture>());
+#endif
+#if defined(CIMMERIAN_VISUAL_PLATFORM_X11)
   visualRunner.SetInjector(std::make_shared<Cimmerian::Visual::X11EventInjector>());
+#elif defined(CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT)
+  visualRunner.SetInjector(std::make_shared<Cimmerian::Visual::LinuxUinputEventInjector>());
 #endif
   Cimmerian::Visual::VisualTestRunSummary visualSummary =
       visualRunner.RunAll(&Cimmerian::Visual::VisualTestRegistry::GetInstance());

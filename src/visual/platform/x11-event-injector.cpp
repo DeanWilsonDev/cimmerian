@@ -3,11 +3,13 @@
 #include <X11/extensions/XTest.h>
 #include <cstdlib>
 #include <stdexcept>
+#include "cimmerian/test-log.hpp"
 
 namespace Cimmerian::Visual {
 
 X11EventInjector::X11EventInjector()
     : display(nullptr)
+    , functional(false)
 {
   Display* opened = XOpenDisplay(nullptr);
   if (!opened) {
@@ -21,6 +23,61 @@ X11EventInjector::X11EventInjector()
   }
 
   this->display = reinterpret_cast<_XDisplay*>(opened);
+  this->functional = this->ProbeInjection();
+
+  if (!this->functional) {
+    TEST_LOG_WARN(
+        "X11EventInjector: XTEST reports success but does not move the "
+        "pointer on this display - some Wayland compositors accept XTEST "
+        "calls from XWayland clients without forwarding them into the real "
+        "input pipeline (see docs/cimmerian_wayland_xtest_injection_gap.md). "
+        "SEND() in visual tests will silently no-op. Consider building with "
+        "CIMMERIAN_VISUAL_PLATFORM=Linux-uinput instead."
+    );
+  }
+}
+
+bool X11EventInjector::ProbeInjection()
+{
+  Display* dpy = reinterpret_cast<Display*>(this->display);
+
+  Window root = DefaultRootWindow(dpy);
+  Window childReturn;
+  int rootXReturn = 0, rootYReturn = 0, winXReturn = 0, winYReturn = 0;
+  unsigned int maskReturn = 0;
+
+  if (!XQueryPointer(
+          dpy, root, &childReturn, &childReturn, &rootXReturn, &rootYReturn, &winXReturn, &winYReturn, &maskReturn
+      )) {
+    // No pointer on this display at all (headless) - nothing meaningful to probe.
+    return false;
+  }
+
+  const int screenWidth = DisplayWidth(dpy, DefaultScreen(dpy));
+  const int screenHeight = DisplayHeight(dpy, DefaultScreen(dpy));
+  const int originalX = rootXReturn;
+  const int originalY = rootYReturn;
+  // Probe a point guaranteed to differ from the current position, staying
+  // inside the screen bounds.
+  const int probeX = (originalX + screenWidth / 2) % (screenWidth > 0 ? screenWidth : 1);
+  const int probeY = (originalY + screenHeight / 2) % (screenHeight > 0 ? screenHeight : 1);
+
+  XTestFakeMotionEvent(dpy, -1, probeX, probeY, CurrentTime);
+  XSync(dpy, False);
+
+  int movedX = 0, movedY = 0;
+  XQueryPointer(
+      dpy, root, &childReturn, &childReturn, &movedX, &movedY, &winXReturn, &winYReturn, &maskReturn
+  );
+
+  const bool moved = (movedX != originalX) || (movedY != originalY);
+
+  // Restore the user's real pointer position regardless of outcome - this
+  // probe shouldn't leave a visible side effect.
+  XTestFakeMotionEvent(dpy, -1, originalX, originalY, CurrentTime);
+  XSync(dpy, False);
+
+  return moved;
 }
 
 X11EventInjector::~X11EventInjector()
