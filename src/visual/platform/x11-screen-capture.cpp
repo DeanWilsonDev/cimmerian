@@ -3,6 +3,7 @@
 #include <X11/Xutil.h>
 #include <cstdint>
 #include <stdexcept>
+#include "cimmerian/test-log.hpp"
 
 namespace Cimmerian::Visual {
 
@@ -45,6 +46,14 @@ Screenshot X11ScreenCapture::Capture(void* windowHandle)
   XWindowAttributes attributes;
   if (!XGetWindowAttributes(display, window, &attributes)) {
     XCloseDisplay(display);
+    TEST_LOG_WARN(
+        "X11ScreenCapture: XGetWindowAttributes failed for the given window "
+        "handle - if the target app uses a Wayland-native toolkit (SDL3, "
+        "GTK4, Qt6 default on a Wayland session), it never becomes an X11 "
+        "window at all and this handle was never valid. Try launching it "
+        "with SDL_VIDEODRIVER=x11 / GDK_BACKEND=x11 / QT_QPA_PLATFORM=xcb "
+        "set first (see docs/cimmerian_live_app_visual_testing_gap.md)."
+    );
     throw std::runtime_error("X11ScreenCapture: XGetWindowAttributes failed for the given window handle");
   }
 

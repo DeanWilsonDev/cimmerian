@@ -1,6 +1,7 @@
 #include "cimmerian/visual/platform/x11-event-injector.hpp"
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>
+#include <cstdint>
 #include <cstdlib>
 #include <stdexcept>
 #include "cimmerian/test-log.hpp"
@@ -9,7 +10,7 @@ namespace Cimmerian::Visual {
 
 X11EventInjector::X11EventInjector()
     : display(nullptr)
-    , functional(false)
+    , functional(true)
 {
   Display* opened = XOpenDisplay(nullptr);
   if (!opened) {
@@ -23,6 +24,10 @@ X11EventInjector::X11EventInjector()
   }
 
   this->display = reinterpret_cast<_XDisplay*>(opened);
+}
+
+bool X11EventInjector::Probe()
+{
   this->functional = this->ProbeInjection();
 
   if (!this->functional) {
@@ -35,6 +40,8 @@ X11EventInjector::X11EventInjector()
         "CIMMERIAN_VISUAL_PLATFORM=Linux-uinput instead."
     );
   }
+
+  return this->functional;
 }
 
 bool X11EventInjector::ProbeInjection()
@@ -78,6 +85,45 @@ bool X11EventInjector::ProbeInjection()
   XSync(dpy, False);
 
   return moved;
+}
+
+bool X11EventInjector::IsWindowFocused(void* windowHandle) const
+{
+  if (!windowHandle) {
+    return true;
+  }
+
+  Display* dpy = reinterpret_cast<Display*>(this->display);
+  const Window target = static_cast<Window>(reinterpret_cast<uintptr_t>(windowHandle));
+
+  Window focused = None;
+  int revertTo = 0;
+  XGetInputFocus(dpy, &focused, &revertTo);
+
+  // Focus may land on a child widget of the target window rather than the
+  // window itself, so walk up the ancestor chain looking for a match.
+  Window current = focused;
+  while (current != None) {
+    if (current == target) {
+      return true;
+    }
+
+    Window root, parent;
+    Window* children = nullptr;
+    unsigned int childCount = 0;
+    if (!XQueryTree(dpy, current, &root, &parent, &children, &childCount)) {
+      break;
+    }
+    if (children) {
+      XFree(children);
+    }
+    if (current == root) {
+      break;
+    }
+    current = parent;
+  }
+
+  return false;
 }
 
 X11EventInjector::~X11EventInjector()

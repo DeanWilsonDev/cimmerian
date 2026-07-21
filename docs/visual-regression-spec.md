@@ -361,6 +361,14 @@ X11 injection requires `libXtst`. macOS requires the Accessibility permission (`
 
 CMake will gate the platform implementations behind `if(UNIX AND NOT APPLE)`, `if(APPLE)`, `if(WIN32)` blocks and expose a `CIMMERIAN_VISUAL_PLATFORM` option to let consumers override.
 
+**X11 precondition on Wayland sessions:** X11 capture/injection can only see windows that exist in the X11 window tree. On a Wayland session (`XDG_SESSION_TYPE=wayland`), a window is only an X11/XWayland window if its toolkit explicitly opts into that — most Wayland-native toolkits default to their native Wayland backend instead, in which case the window never appears in the X11 tree at all, however visibly it's on screen. Common toolkits need an explicit env var set before launch to force X11/XWayland mode: `SDL_VIDEODRIVER=x11` (SDL3), `GDK_BACKEND=x11` (GTK4), `QT_QPA_PLATFORM=xcb` (Qt6). `X11ScreenCapture::Capture()` and the window-lookup helpers below warn and point at this when they can't find/attach to a window, but the env var itself is the actual fix.
+
+**Both injection backends are real, global OS input, unscoped to the target window.** Neither XTEST/X11 nor the Linux kernel `/dev/uinput` layer (`LinuxUinputEventInjector`) has a "scoped to this window" concept the way e.g. a browser automation tool's isolated page context does - coordinates are screen-absolute, and if the target window loses real OS focus mid-test (another app's notification, an alt-tab, a background process raising a window), the next injected event goes wherever focus actually is, not necessarily the window under test. This is a real risk when running visual regression tests against a live, multi-window developer desktop rather than a dedicated `Xvfb`/CI display; `X11EventInjector` checks focus via `XGetInputFocus` before each `SEND()` and warns (without refusing) if the target window isn't focused, but this narrows rather than eliminates the race.
+
+### Testing a real, separately-launched application
+
+`WaitForWindowByTitle` / `WaitForWindowByPid` (`include/cimmerian/visual/platform/x11-window-lookup.hpp`, X11 platform only) poll the X11 window tree for a window matching a title substring or owning pid, returning its handle as `void*` (or `nullptr` on timeout, with the Wayland-native-surface warning above if nothing ever matched). This is the realistic way to obtain a `VISUAL_DESCRIBE` window handle for an application spawned as its own subprocess, rather than a scratch window the test creates inline.
+
 ### PNG I/O
 
 Use `stb_image` and `stb_image_write` (single-header, MIT). They are embedded directly into `src/visual/` as implementation files, so consumers have no extra dependencies to manage.

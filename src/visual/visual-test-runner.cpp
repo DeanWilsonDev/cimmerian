@@ -107,7 +107,7 @@ void VisualTestRunner::SetCapture(std::shared_ptr<IScreenCapture> newCapture)
 
 void VisualTestRunner::SetInjector(std::shared_ptr<IEventInjector> newInjector)
 {
-  if (newInjector && !newInjector->IsFunctional()) {
+  if (newInjector && !newInjector->Probe()) {
     TEST_LOG_WARN(
         "VisualTestRunner: registered IEventInjector reports it is not "
         "functional - SEND() in visual tests will silently no-op instead of "
@@ -162,6 +162,15 @@ void VisualTestRunner::SendEvent(const UIEvent& event)
         "SEND: active IEventInjector reports it is not functional - this "
         "event is likely a no-op and any following ASSERT_SNAPSHOT may pass "
         "against pre-existing UI state rather than the intended interaction"
+    );
+  }
+  if (this->currentWindowHandle && !activeInjector->IsWindowFocused(this->currentWindowHandle)) {
+    TEST_LOG_WARN(
+        "SEND: target window does not currently have OS input focus - both "
+        "provided Linux backends inject real, screen-absolute OS input with "
+        "no concept of 'target window', so this event may land in a "
+        "different window if focus shifted since the test started (see "
+        "docs/cimmerian_live_app_visual_testing_gap.md gap 4)"
     );
   }
   activeInjector->Inject(event);

@@ -86,7 +86,8 @@ if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11")
   endif()
 
   target_sources(cimmerian PRIVATE src/visual/platform/x11-screen-capture.cpp
-                                    src/visual/platform/x11-event-injector.cpp)
+                                    src/visual/platform/x11-event-injector.cpp
+                                    src/visual/platform/x11-window-lookup.cpp)
   target_include_directories(cimmerian PRIVATE ${X11_INCLUDE_DIR})
   target_link_libraries(cimmerian PRIVATE ${X11_LIBRARIES} ${X11_Xtst_LIB})
   target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_X11)
@@ -95,7 +96,8 @@ elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-uinput")
   find_package(X11 REQUIRED)
 
   target_sources(cimmerian PRIVATE src/visual/platform/x11-screen-capture.cpp
-                                    src/visual/platform/linux-uinput-event-injector.cpp)
+                                    src/visual/platform/linux-uinput-event-injector.cpp
+                                    src/visual/platform/x11-window-lookup.cpp)
   target_include_directories(cimmerian PRIVATE ${X11_INCLUDE_DIR})
   target_link_libraries(cimmerian PRIVATE ${X11_LIBRARIES})
   target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT)
