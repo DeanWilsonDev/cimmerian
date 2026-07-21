@@ -25,7 +25,16 @@ bool AutoLinuxEventInjector::Probe()
   try {
     this->uinputFallback = std::make_unique<LinuxUinputEventInjector>();
     this->usingFallback = true;
-    return this->uinputFallback->IsFunctional();
+    const bool uinputFunctional = this->uinputFallback->Probe();
+    if (!uinputFunctional) {
+      TEST_LOG_WARN(
+          "AutoLinuxEventInjector: neither XTEST nor the /dev/uinput "
+          "fallback reach the real input pipeline on this session - SEND() "
+          "in visual tests will silently no-op (see "
+          "docs/cimmerian_uinput_no_functional_check_gap.md)."
+      );
+    }
+    return uinputFunctional;
   }
   catch (const std::exception& ex) {
     TEST_LOG_WARN(

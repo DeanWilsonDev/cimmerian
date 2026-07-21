@@ -4,12 +4,14 @@
 #include <linux/uinput.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
+#include "cimmerian/test-log.hpp"
 
 #if __has_include(<X11/Xlib.h>)
 #include <X11/Xlib.h>
@@ -73,6 +75,7 @@ LinuxUinputEventInjector::LinuxUinputEventInjector(int width, int height)
     : fd(-1)
     , screenWidth(width)
     , screenHeight(height)
+    , functional(true)
 {
   DetectScreenSize(this->screenWidth, this->screenHeight);
 
@@ -150,6 +153,56 @@ LinuxUinputEventInjector::~LinuxUinputEventInjector()
     ioctl(this->fd, UI_DEV_DESTROY);
     close(this->fd);
   }
+}
+
+bool LinuxUinputEventInjector::Probe()
+{
+#if defined(CIMMERIAN_UINPUT_HAVE_X11)
+  Display* dpy = XOpenDisplay(nullptr);
+  if (!dpy) {
+    // Can't check by reading the real pointer position; don't block on it.
+    this->functional = true;
+    return this->functional;
+  }
+
+  Window root = DefaultRootWindow(dpy);
+  Window childReturn;
+  int origX = 0, origY = 0, winXReturn = 0, winYReturn = 0;
+  unsigned int maskReturn = 0;
+  XQueryPointer(dpy, root, &childReturn, &childReturn, &origX, &origY, &winXReturn, &winYReturn, &maskReturn);
+
+  const int probeX = (origX + this->screenWidth / 2) % std::max(this->screenWidth, 1);
+  const int probeY = (origY + this->screenHeight / 2) % std::max(this->screenHeight, 1);
+  this->MoveTo(probeX, probeY);
+  // Give the compositor/seat a moment to consume the event before checking.
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+  int movedX = 0, movedY = 0;
+  XQueryPointer(dpy, root, &childReturn, &childReturn, &movedX, &movedY, &winXReturn, &winYReturn, &maskReturn);
+
+  this->functional = (movedX != origX) || (movedY != origY);
+
+  // Restore the original pointer position regardless of outcome - this probe
+  // shouldn't leave a visible side effect.
+  this->MoveTo(origX, origY);
+  XCloseDisplay(dpy);
+
+  if (!this->functional) {
+    TEST_LOG_WARN(
+        "LinuxUinputEventInjector: /dev/uinput device created successfully "
+        "but events aren't reaching the real pointer on this session - "
+        "possibly a logind/seat-assignment gap (see "
+        "docs/cimmerian_uinput_no_functional_check_gap.md). SEND() in "
+        "visual tests will silently no-op."
+    );
+  }
+#else
+  // No X11 available to read the real pointer position back - nothing to
+  // compare against, so stay optimistic.
+  this->functional = true;
+#endif
+
+  return this->functional;
 }
 
 void LinuxUinputEventInjector::MoveTo(int x, int y)

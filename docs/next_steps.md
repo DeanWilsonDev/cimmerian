@@ -10,58 +10,51 @@
 
 - `docs/visual-regression-spec.md` / `docs/snapshot-testing-spec.md` — the
   extension's own design docs.
-- `docs/cimmerian_wayland_xtest_injection_gap.md` — addressed this
-  session, see below.
-- `docs/cimmerian_live_app_visual_testing_gap.md` — implemented last
-  session, extended this session (Win32/macOS window lookup).
+- `docs/cimmerian_uinput_no_functional_check_gap.md` — filed and
+  addressed this session, see below.
+- `docs/cimmerian_wayland_xtest_injection_gap.md` / `docs/
+  cimmerian_live_app_visual_testing_gap.md` — addressed in prior sessions.
 
 ## What's actually left open
 
-- Nothing tracked as blocking. The two items flagged at the end of the
-  last session (XTEST-over-XWayland reliability, Win32/macOS window
-  lookup) are both done — see below.
 - **`Linux-auto`'s `AutoLinuxEventInjector` is untested on a compositor
-  where XTEST actually works** (this session's dev environment has
-  XTEST-over-XWayland non-functional, so only the fallback path was
-  exercised live) — the non-fallback path is just `X11EventInjector`
-  unchanged, so risk is low, but worth knowing if something looks off on
-  a compositor that forwards XTEST correctly.
-- **Win32/macOS window-lookup and `AutoLinuxEventInjector` weren't
-  compile-tested** (no Windows/macOS toolchain, and this Linux
-  environment's XTEST is non-functional so uinput was exercised but not
-  a working-XTEST codepath) — they mirror the exact shape of this
-  codebase's existing platform backends, but flagging in case something
-  doesn't build cleanly on a real Windows/macOS toolchain.
+  where XTEST actually works** (carried over from last session — this
+  dev environment's XTEST-over-XWayland is still non-functional, so only
+  the fallback path has ever been exercised live).
+- **Win32/macOS window-lookup and `AutoLinuxEventInjector` still aren't
+  compile-tested** (carried over — no Windows/macOS toolchain available
+  here).
 
 ## What changed this session
 
-Addressed both items flagged as open at the end of the previous session:
-
-**1. `cimmerian_wayland_xtest_injection_gap.md`'s underlying issue.** A
-compositor that silently drops XTEST-over-XWayland input can't be fixed
-from the X11 client side — that's the compositor's own choice, not a
-Cimmerian bug — so instead added `AutoLinuxEventInjector`
-(`CIMMERIAN_VISUAL_PLATFORM=Linux-auto`,
-`src/visual/platform/auto-linux-event-injector.cpp`): starts on the cheap
-`X11EventInjector`/XTEST path, and falls back to
-`LinuxUinputEventInjector` automatically if `Probe()` finds XTEST
-non-functional on the current compositor. Wired into
-`test/test-main.cpp` and `include/cimmerian/visual.hpp`. Verified live in
-this session's own KDE/XWayland environment: `Probe()` correctly detects
-XTEST is non-functional here and falls back to uinput, which then reports
-functional.
-
-**2. Win32/macOS `WaitForWindowByTitle`/`WaitForWindowByPid`.**
-Refactored the X11-only version from last session into a single shared
-public header (`include/cimmerian/visual/window-lookup.hpp`, moved from
-`include/cimmerian/visual/platform/x11-window-lookup.hpp`) with
-per-platform implementations: `src/visual/platform/win32-window-lookup.cpp`
-(`EnumWindows`/`GetWindowThreadProcessId`) and
-`src/visual/platform/macos-window-lookup.cpp`
-(`CGWindowListCopyWindowInfo`), alongside the existing X11 one. Wired into
-CMake for all five platform values.
-
-Built and ran the full test suite for all three Linux
+Investigated a `pharos-proto` report: a `CIMMERIAN_VISUAL_PLATFORM=
+Linux-uinput` visual test (a held-press click, `MouseButtonPress`/`Wait`/
+`MouseButtonRelease`) ran clean, captured a "passing" golden, but the
+click never actually registered in the app under test. Traced with a
+standalone program (independent of both Cimmerian and pharos-proto,
+reproducing `LinuxUinputEventInjector`'s own ioctl sequence by hand): the
+`/dev/uinput` device is created successfully (visible in `/proc/bus/
+input/devices`, real evdev handler nodes, no ioctl failures) but produces
+zero pointer movement in that particular sandboxed session — confirmed
+both with cimmerian's own `ABS`+`INPUT_PROP_DIRECT` device shape and a
+plain `REL_X`/`REL_Y` mouse device, ruling out a device-classification
+explanation. `xdotool getmouselocation` (an X11 *read*, not an injection
+path) confirms the position never changes. Wrote up
+`docs/cimmerian_uinput_no_functional_check_gap.md` with the full repro,
+root-cause analysis (same "protocol call succeeds, compositor doesn't
+actually route it" shape as the original XTEST gap, just never given the
+same self-check treatment), and a concrete proposed `Probe()`
+implementation, then implemented it: `LinuxUinputEventInjector` now
+overrides `IsFunctional()`/`Probe()` with a before/after `XQueryPointer`
+round-trip around a real `MoveTo()` call (mirroring
+`X11EventInjector::ProbeInjection()`), restoring the original pointer
+position and logging a `TEST_LOG_WARN` when the move doesn't land.
+`AutoLinuxEventInjector::Probe()` was also fixed to actually call the
+uinput fallback's `Probe()` (it previously just read `IsFunctional()`,
+which nothing had ever set to `false`). Verified live in this session's
+own sandboxed shell: the probe correctly detects uinput events aren't
+reaching the real pointer here and logs the warning instead of a silent
+false pass. Built and ran the full test suite for all three Linux
 `CIMMERIAN_VISUAL_PLATFORM` values (`X11`, `Linux-uinput`, `Linux-auto`) —
 clean builds, no regressions (the one failing test, `example.test.cpp`'s
 "Compare Vectors", is the same pre-existing intentional demo of the diff
