@@ -17,6 +17,17 @@ CGMouseButton ToCGMouseButton(int button)
   }
 }
 
+// MouseButtonReleaseEvent carries no x/y (it targets whatever button is
+// currently down), but CGEventCreateMouseEvent requires a point even for an
+// up event - query the pointer's actual current location instead.
+CGPoint CurrentMouseLocation()
+{
+  CGEventRef event = CGEventCreate(nullptr);
+  CGPoint point = CGEventGetLocation(event);
+  CFRelease(event);
+  return point;
+}
+
 } // namespace
 
 MacOSEventInjector::MacOSEventInjector()
@@ -50,6 +61,24 @@ void MacOSEventInjector::Inject(const UIEvent& event)
           CGEventRef down = CGEventCreateMouseEvent(nullptr, downType, point, cgButton);
           CGEventPost(kCGHIDEventTap, down);
           CFRelease(down);
+
+          CGEventRef up = CGEventCreateMouseEvent(nullptr, upType, point, cgButton);
+          CGEventPost(kCGHIDEventTap, up);
+          CFRelease(up);
+        }
+        else if constexpr (std::is_same_v<T, MouseButtonPressEvent>) {
+          CGPoint point = CGPointMake(e.x, e.y);
+          CGMouseButton cgButton = ToCGMouseButton(e.button);
+          CGEventType downType = (e.button == 3) ? kCGEventRightMouseDown : kCGEventLeftMouseDown;
+
+          CGEventRef down = CGEventCreateMouseEvent(nullptr, downType, point, cgButton);
+          CGEventPost(kCGHIDEventTap, down);
+          CFRelease(down);
+        }
+        else if constexpr (std::is_same_v<T, MouseButtonReleaseEvent>) {
+          CGPoint point = CurrentMouseLocation();
+          CGMouseButton cgButton = ToCGMouseButton(e.button);
+          CGEventType upType = (e.button == 3) ? kCGEventRightMouseUp : kCGEventLeftMouseUp;
 
           CGEventRef up = CGEventCreateMouseEvent(nullptr, upType, point, cgButton);
           CGEventPost(kCGHIDEventTap, up);

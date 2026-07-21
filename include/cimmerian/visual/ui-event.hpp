@@ -15,6 +15,15 @@ struct MouseClickEvent {
   int y;
   int button; // 1=left 2=mid 3=right
 };
+struct MouseButtonPressEvent {
+  int x;
+  int y;
+  int button; // 1=left 2=mid 3=right
+};
+struct MouseButtonReleaseEvent {
+  int button; // no x/y -- targets whatever button is currently down, same
+              // convention KeyReleaseEvent already uses
+};
 struct MouseScrollEvent {
   int x;
   int y;
@@ -34,6 +43,8 @@ struct WaitEvent {
 using UIEvent = std::variant<
     MouseMoveEvent,
     MouseClickEvent,
+    MouseButtonPressEvent,
+    MouseButtonReleaseEvent,
     MouseScrollEvent,
     KeyPressEvent,
     KeyReleaseEvent,
@@ -51,6 +62,18 @@ struct EventSequence {
   EventSequence& Click(int x, int y, int button = 1)
   {
     this->events.push_back(MouseClickEvent {x, y, button});
+    return *this;
+  }
+
+  EventSequence& MouseButtonPress(int x, int y, int button = 1)
+  {
+    this->events.push_back(MouseButtonPressEvent {x, y, button});
+    return *this;
+  }
+
+  EventSequence& MouseButtonRelease(int button = 1)
+  {
+    this->events.push_back(MouseButtonReleaseEvent {button});
     return *this;
   }
 

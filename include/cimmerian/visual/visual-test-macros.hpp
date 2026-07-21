@@ -82,6 +82,11 @@ namespace Cimmerian::Visual {
 
 inline MouseMoveEvent MouseMove(int x, int y) { return MouseMoveEvent {x, y}; }
 inline MouseClickEvent MouseClick(int x, int y, int button = 1) { return MouseClickEvent {x, y, button}; }
+inline MouseButtonPressEvent MouseButtonPress(int x, int y, int button = 1)
+{
+  return MouseButtonPressEvent {x, y, button};
+}
+inline MouseButtonReleaseEvent MouseButtonRelease(int button = 1) { return MouseButtonReleaseEvent {button}; }
 inline MouseScrollEvent MouseScroll(int x, int y, int deltaX, int deltaY)
 {
   return MouseScrollEvent {x, y, deltaX, deltaY};

@@ -4,7 +4,7 @@
 > the end of each work session; supersedes its own previous contents
 > rather than accumulating history (the individual gap/spec docs are the
 > durable record).
-> Last updated: 2026-07-20.
+> Last updated: 2026-07-21.
 
 ## Read first
 
@@ -13,41 +13,44 @@
 - `docs/cimmerian_wayland_xtest_injection_gap.md` — why
   `LinuxUinputEventInjector` exists at all (XTEST-over-XWayland silently
   no-ops on at least one real Wayland compositor).
-- `docs/cimmerian_mouse_click_no_hold_gap.md` — new this session, see
-  below.
+- `docs/cimmerian_mouse_click_no_hold_gap.md` — implemented this session,
+  see below.
 
 ## What's actually left open
 
-- **`MouseClickEvent` has no held-press primitive.** Every
-  `IEventInjector` backend (`Linux-uinput`, `X11`, `Win32`, `macOS`)
-  presses and releases a mouse button with no gap in between. Target
-  applications that poll input state once per frame rather than draining
-  an event queue (confirmed concretely against `penumbra-proto`'s
-  `PlatformWindow`, used by `pharos-proto`) can silently miss the whole
-  click — no error, just a snapshot that quietly reflects pre-click
-  state. `KeyPressEvent`/`KeyReleaseEvent` already solve this for the
-  keyboard (split into two events, caller controls timing via `Wait()`);
-  `docs/cimmerian_mouse_click_no_hold_gap.md` proposes the same shape for
-  the mouse — `MouseButtonPressEvent`/`MouseButtonReleaseEvent`, additive
-  only, `MouseClickEvent` unchanged. Not started; sized and ready to pick
-  up.
 - **`X11EventInjector`'s XTEST-over-XWayland gap (`cimmerian_wayland_xtest_injection_gap.md`)**
   — `LinuxUinputEventInjector` is the working fallback and is what's
   actually in use; the underlying "XTEST reports success but does
   nothing" issue on some compositors was never independently fixed,
   routed around instead. Still open if anyone wants `X11EventInjector`
   itself to be reliable rather than just avoided.
-- **Corner-case for whoever picks up the click-hold work**: once
-  `MouseButtonPressEvent`/`ReleaseEvent` exist, `pharos-proto`'s
-  `tests/visual/pharos_toolbar.visual.test.cpp` has a real, previously-
-  abandoned Explorer-row-selection / `ColorFilterDropdown`-open test
-  attempt documented in its own trailing comment — a good first real
-  consumer to validate the new primitive against once it lands.
+- **Uncommitted**: the `MouseButtonPressEvent`/`MouseButtonReleaseEvent`
+  implementation below is in the working tree, not yet committed. Review
+  and commit before anything downstream (e.g. `pharos-proto`) tries to
+  vendor this checkout.
 
 ## What changed this session
 
-Nothing implemented here — `docs/cimmerian_mouse_click_no_hold_gap.md`
-was filed after tracing the click-miss symptom (found while extending
-`pharos-proto`'s visual regression suite) down to Cimmerian's own
-`MouseClickEvent` handling, confirmed by reading all four injector
-backends, not just the one that surfaced it.
+Implemented `docs/cimmerian_mouse_click_no_hold_gap.md` §3 in full:
+`MouseButtonPressEvent`/`MouseButtonReleaseEvent` added to
+`include/cimmerian/visual/ui-event.hpp` (alongside the unchanged
+`MouseClickEvent`), `EventSequence::MouseButtonPress`/`MouseButtonRelease`
+added, all four `IEventInjector` backends
+(`linux-uinput-event-injector.cpp`, `x11-event-injector.cpp`,
+`win32-event-injector.cpp`, `macos-event-injector.cpp`) gained matching
+press/release branches, `visual-test-macros.hpp` gained the `SEND()` shim
+functions, and `docs/visual-regression-spec.md`'s event-type table was
+updated to match. Built and ran the existing test suite on Linux
+(`X11EventInjector`/`LinuxUinputEventInjector` paths, the two compiled on
+this platform) — clean build, no regressions (the one failing test,
+`example.test.cpp`'s "Compare Vectors", is a pre-existing intentional
+demo of the diff formatter, unrelated to this change). `Win32EventInjector`/
+`MacOSEventInjector` weren't compile-tested (no Windows/macOS toolchain
+here) but mirror the exact shape of their own existing `MouseClickEvent`
+branches.
+
+Filed `pharos-proto/docs/pharos_click_hold_selection_test_feature_request.md`
+as a `/feature-request` — re-attempting the abandoned Explorer-row-selection
+/ `ColorFilterDropdown` click test flagged in that repo's own
+`pharos_toolbar.visual.test.cpp` trailing comment is Pharos's own work to
+pick up now that this primitive exists, not something to implement here.

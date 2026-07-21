@@ -214,6 +214,13 @@ void LinuxUinputEventInjector::Inject(const UIEvent& event)
           this->EmitKey(btn, 1);
           this->EmitKey(btn, 0);
         }
+        else if constexpr (std::is_same_v<T, MouseButtonPressEvent>) {
+          this->MoveTo(e.x, e.y);
+          this->EmitKey(ButtonToEvdev(e.button), 1);
+        }
+        else if constexpr (std::is_same_v<T, MouseButtonReleaseEvent>) {
+          this->EmitKey(ButtonToEvdev(e.button), 0);
+        }
         else if constexpr (std::is_same_v<T, MouseScrollEvent>) {
           this->MoveTo(e.x, e.y);
           const int verticalStep = e.deltaY > 0 ? 1 : -1;

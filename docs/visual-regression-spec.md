@@ -59,6 +59,8 @@ namespace Cimmerian::Visual {
 
 struct MouseMoveEvent  { int x; int y; };
 struct MouseClickEvent { int x; int y; int button; };  // button: 1=left 2=mid 3=right
+struct MouseButtonPressEvent   { int x; int y; int button; };  // button: 1=left 2=mid 3=right
+struct MouseButtonReleaseEvent { int button; };  // no x/y - targets whatever button is down
 struct MouseScrollEvent{ int x; int y; int deltaX; int deltaY; };
 struct KeyPressEvent   { int keyCode; };
 struct KeyReleaseEvent { int keyCode; };
@@ -67,6 +69,8 @@ struct WaitEvent       { std::chrono::milliseconds duration; };
 using UIEvent = std::variant<
     MouseMoveEvent,
     MouseClickEvent,
+    MouseButtonPressEvent,
+    MouseButtonReleaseEvent,
     MouseScrollEvent,
     KeyPressEvent,
     KeyReleaseEvent,
@@ -86,6 +90,8 @@ struct EventSequence {
 
     EventSequence& MouseMove(int x, int y);
     EventSequence& Click(int x, int y, int button = 1);
+    EventSequence& MouseButtonPress(int x, int y, int button = 1);
+    EventSequence& MouseButtonRelease(int button = 1);
     EventSequence& Scroll(int x, int y, int deltaX, int deltaY);
     EventSequence& KeyPress(int keyCode);
     EventSequence& KeyRelease(int keyCode);

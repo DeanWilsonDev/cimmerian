@@ -79,6 +79,13 @@ void Win32EventInjector::Inject(const UIEvent& event)
           SendMouseButton(e.button, true);
           SendMouseButton(e.button, false);
         }
+        else if constexpr (std::is_same_v<T, MouseButtonPressEvent>) {
+          SendMouseMove(e.x, e.y);
+          SendMouseButton(e.button, true);
+        }
+        else if constexpr (std::is_same_v<T, MouseButtonReleaseEvent>) {
+          SendMouseButton(e.button, false);
+        }
         else if constexpr (std::is_same_v<T, MouseScrollEvent>) {
           SendMouseMove(e.x, e.y);
           SendMouseWheel(e.deltaX, e.deltaY);

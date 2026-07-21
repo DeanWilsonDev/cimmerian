@@ -103,6 +103,13 @@ void X11EventInjector::Inject(const UIEvent& event)
           XTestFakeButtonEvent(dpy, static_cast<unsigned int>(e.button), True, CurrentTime);
           XTestFakeButtonEvent(dpy, static_cast<unsigned int>(e.button), False, CurrentTime);
         }
+        else if constexpr (std::is_same_v<T, MouseButtonPressEvent>) {
+          XTestFakeMotionEvent(dpy, -1, e.x, e.y, CurrentTime);
+          XTestFakeButtonEvent(dpy, static_cast<unsigned int>(e.button), True, CurrentTime);
+        }
+        else if constexpr (std::is_same_v<T, MouseButtonReleaseEvent>) {
+          XTestFakeButtonEvent(dpy, static_cast<unsigned int>(e.button), False, CurrentTime);
+        }
         else if constexpr (std::is_same_v<T, MouseScrollEvent>) {
           XTestFakeMotionEvent(dpy, -1, e.x, e.y, CurrentTime);
           // X11 wheel scroll is modelled as button 4 (up) / 5 (down) clicks.
