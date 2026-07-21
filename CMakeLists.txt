@@ -75,9 +75,9 @@ endif()
 
 set(CIMMERIAN_VISUAL_PLATFORM
     "${_CIMMERIAN_VISUAL_PLATFORM_DEFAULT}"
-    CACHE STRING "Visual regression platform backend (X11, Linux-uinput, Win32, macOS, None)")
+    CACHE STRING "Visual regression platform backend (X11, Linux-uinput, Linux-auto, Win32, macOS, None)")
 set_property(CACHE CIMMERIAN_VISUAL_PLATFORM PROPERTY STRINGS X11 Linux-uinput
-                                                        Win32 macOS None)
+                                                        Linux-auto Win32 macOS None)
 
 if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11")
   find_package(X11 REQUIRED)
@@ -102,15 +102,37 @@ elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-uinput")
   target_link_libraries(cimmerian PRIVATE ${X11_LIBRARIES})
   target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT)
 
+elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-auto")
+  # Tries XTEST first, falls back to uinput at runtime if Probe() finds XTEST
+  # non-functional on the current compositor (see
+  # docs/cimmerian_wayland_xtest_injection_gap.md and
+  # src/visual/platform/auto-linux-event-injector.cpp) - needs both backends'
+  # dependencies present.
+  find_package(X11 REQUIRED)
+  if(NOT X11_XTest_FOUND)
+    message(FATAL_ERROR "Cimmerian visual regression needs libXtst (X11 XTEST extension) headers/libs")
+  endif()
+
+  target_sources(cimmerian PRIVATE src/visual/platform/x11-screen-capture.cpp
+                                    src/visual/platform/x11-event-injector.cpp
+                                    src/visual/platform/linux-uinput-event-injector.cpp
+                                    src/visual/platform/auto-linux-event-injector.cpp
+                                    src/visual/platform/x11-window-lookup.cpp)
+  target_include_directories(cimmerian PRIVATE ${X11_INCLUDE_DIR})
+  target_link_libraries(cimmerian PRIVATE ${X11_LIBRARIES} ${X11_Xtst_LIB})
+  target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_LINUX_AUTO)
+
 elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "Win32")
   target_sources(cimmerian PRIVATE src/visual/platform/win32-screen-capture.cpp
-                                    src/visual/platform/win32-event-injector.cpp)
+                                    src/visual/platform/win32-event-injector.cpp
+                                    src/visual/platform/win32-window-lookup.cpp)
   target_link_libraries(cimmerian PRIVATE user32 gdi32)
   target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_WIN32)
 
 elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "macOS")
   target_sources(cimmerian PRIVATE src/visual/platform/macos-screen-capture.cpp
-                                    src/visual/platform/macos-event-injector.cpp)
+                                    src/visual/platform/macos-event-injector.cpp
+                                    src/visual/platform/macos-window-lookup.cpp)
   find_library(APPLICATION_SERVICES_FRAMEWORK ApplicationServices REQUIRED)
   target_link_libraries(cimmerian PRIVATE ${APPLICATION_SERVICES_FRAMEWORK})
   target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_MACOS)

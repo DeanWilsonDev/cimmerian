@@ -359,7 +359,7 @@ struct VisualTestRunSummary {
 
 X11 injection requires `libXtst`. macOS requires the Accessibility permission (`AXIsProcessTrusted()`). Windows requires no extra permissions for `SendInput` to the same process.
 
-CMake will gate the platform implementations behind `if(UNIX AND NOT APPLE)`, `if(APPLE)`, `if(WIN32)` blocks and expose a `CIMMERIAN_VISUAL_PLATFORM` option to let consumers override.
+CMake will gate the platform implementations behind `if(UNIX AND NOT APPLE)`, `if(APPLE)`, `if(WIN32)` blocks and expose a `CIMMERIAN_VISUAL_PLATFORM` option to let consumers override. On Linux, `Linux-auto` builds both `X11EventInjector` and `LinuxUinputEventInjector` and picks between them at `Probe()` time (`src/visual/platform/auto-linux-event-injector.cpp`) — it starts on the cheap XTEST path and only falls back to `/dev/uinput` if XTEST turns out to report success without actually reaching the compositor's input pipeline (see `docs/cimmerian_wayland_xtest_injection_gap.md`). A compositor that silently drops XTEST-over-XWayland input can't be made to forward it from the client side — that's inherent to that compositor's own XTEST support, not something fixable in `X11EventInjector` itself — so `Linux-auto` is the closest available thing to "make X11EventInjector reliable": pick the cheap backend by default, detect at runtime when it isn't working, and switch without the consumer having to know up front.
 
 **X11 precondition on Wayland sessions:** X11 capture/injection can only see windows that exist in the X11 window tree. On a Wayland session (`XDG_SESSION_TYPE=wayland`), a window is only an X11/XWayland window if its toolkit explicitly opts into that — most Wayland-native toolkits default to their native Wayland backend instead, in which case the window never appears in the X11 tree at all, however visibly it's on screen. Common toolkits need an explicit env var set before launch to force X11/XWayland mode: `SDL_VIDEODRIVER=x11` (SDL3), `GDK_BACKEND=x11` (GTK4), `QT_QPA_PLATFORM=xcb` (Qt6). `X11ScreenCapture::Capture()` and the window-lookup helpers below warn and point at this when they can't find/attach to a window, but the env var itself is the actual fix.
 
@@ -367,7 +367,7 @@ CMake will gate the platform implementations behind `if(UNIX AND NOT APPLE)`, `i
 
 ### Testing a real, separately-launched application
 
-`WaitForWindowByTitle` / `WaitForWindowByPid` (`include/cimmerian/visual/platform/x11-window-lookup.hpp`, X11 platform only) poll the X11 window tree for a window matching a title substring or owning pid, returning its handle as `void*` (or `nullptr` on timeout, with the Wayland-native-surface warning above if nothing ever matched). This is the realistic way to obtain a `VISUAL_DESCRIBE` window handle for an application spawned as its own subprocess, rather than a scratch window the test creates inline.
+`WaitForWindowByTitle` / `WaitForWindowByPid` (`include/cimmerian/visual/window-lookup.hpp`, implemented per-platform under `src/visual/platform/`) poll for a window matching a title substring or owning pid, returning its handle as `void*` (or `nullptr` on timeout; on X11, with the Wayland-native-surface warning above if nothing ever matched). This is the realistic way to obtain a `VISUAL_DESCRIBE` window handle for an application spawned as its own subprocess, rather than a scratch window the test creates inline.
 
 ### PNG I/O
 

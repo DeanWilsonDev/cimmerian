@@ -5,9 +5,25 @@
 > screenshot verification — the same job `pharos-proto/CLAUDE.md`'s "Verifying
 > UI changes" section previously did by hand with macOS's `cliclick`/
 > `screencapture`. This is the Linux side of that same need.
-> **Status:** confirmed, reproducible, not started. `X11ScreenCapture` (the
-> other half of the same extension) is unaffected and works correctly in this
-> same environment.
+> **Status:** addressed, via both directions §4 proposed. `X11ScreenCapture`
+> (the other half of the same extension) is unaffected and works correctly in
+> this same environment.
+> `LinuxUinputEventInjector` (`src/visual/platform/linux-uinput-event-injector.cpp`,
+> `CIMMERIAN_VISUAL_PLATFORM=Linux-uinput`) shipped in an earlier session as
+> the `/dev/uinput`-based alternative backend. `X11EventInjector` itself
+> gained the self-check `Probe()`/`IsFunctional()` (made an explicit,
+> deliberate call rather than an eager constructor side effect — see
+> `docs/cimmerian_live_app_visual_testing_gap.md` gap 3). This session added
+> `AutoLinuxEventInjector` (`CIMMERIAN_VISUAL_PLATFORM=Linux-auto`,
+> `src/visual/platform/auto-linux-event-injector.cpp`), which combines both:
+> starts on `X11EventInjector`, and falls back to `LinuxUinputEventInjector`
+> automatically if `Probe()` finds XTEST non-functional on the current
+> compositor. Note what isn't and can't be fixed: a compositor that chooses
+> not to forward XTEST-over-XWayland input into its real input pipeline
+> can't be made to by anything on the client side — `X11EventInjector`
+> itself stays exactly as reliable (or not) as its host compositor's XTEST
+> support; `Linux-auto`/`LinuxUinputEventInjector` route around that rather
+> than changing it.
 > **Environment:** KDE Plasma 6 (`kwin_wayland`) as the real Wayland
 > compositor, app under test running under XWayland
 > (`SDL_VIDEODRIVER=x11`), `libXtst` present, `XTestQueryExtension` reports

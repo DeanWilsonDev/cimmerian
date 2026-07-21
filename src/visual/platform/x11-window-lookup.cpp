@@ -1,4 +1,4 @@
-#include "cimmerian/visual/platform/x11-window-lookup.hpp"
+#include "cimmerian/visual/window-lookup.hpp"
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <chrono>

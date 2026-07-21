@@ -13,9 +13,11 @@
 > now documents the X11/Wayland precondition, and `X11ScreenCapture::Capture()`
 > emits a `TEST_LOG_WARN` pointing at it when window lookup fails. Gap 2:
 > `WaitForWindowByTitle`/`WaitForWindowByPid`
-> (`include/cimmerian/visual/platform/x11-window-lookup.hpp`, built for both
-> the X11 and Linux-uinput backends) poll the X11 window tree for a
-> separately-launched app's window. Gap 3: `X11EventInjector`'s constructor
+> (`include/cimmerian/visual/window-lookup.hpp`, implemented per-platform —
+> X11 window-tree polling for X11/Linux-uinput/Linux-auto,
+> `EnumWindows`/`GetWindowThreadProcessId` for Win32,
+> `CGWindowListCopyWindowInfo` for macOS) poll for a separately-launched
+> app's window. Gap 3: `X11EventInjector`'s constructor
 > no longer probes eagerly — `IEventInjector::Probe()` is a new virtual,
 > `VisualTestRunner::SetInjector()` calls it once, deliberately. Gap 4:
 > `IEventInjector::IsWindowFocused()` is a new virtual, `X11EventInjector`

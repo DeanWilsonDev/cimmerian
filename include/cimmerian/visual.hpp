@@ -24,7 +24,18 @@
 #elif defined(CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT)
 #include "visual/platform/linux-uinput-event-injector.hpp"
 #include "visual/platform/x11-screen-capture.hpp"
+#elif defined(CIMMERIAN_VISUAL_PLATFORM_LINUX_AUTO)
+#include "visual/platform/auto-linux-event-injector.hpp"
+#include "visual/platform/x11-screen-capture.hpp"
 #elif defined(CIMMERIAN_VISUAL_PLATFORM_X11)
 #include "visual/platform/x11-event-injector.hpp"
 #include "visual/platform/x11-screen-capture.hpp"
+#endif
+
+// WaitForWindowByTitle/WaitForWindowByPid - available for every platform
+// backend above except None.
+#if defined(CIMMERIAN_VISUAL_PLATFORM_WIN32) || defined(CIMMERIAN_VISUAL_PLATFORM_MACOS) ||                        \
+    defined(CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT) || defined(CIMMERIAN_VISUAL_PLATFORM_LINUX_AUTO) ||           \
+    defined(CIMMERIAN_VISUAL_PLATFORM_X11)
+#include "visual/window-lookup.hpp"
 #endif
