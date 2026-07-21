@@ -258,6 +258,66 @@ ASSERT_SNAPSHOT("label", DiffOptions{ .maxDifferencePercent = 0.5f });
 
 On failure in verify mode, the actual and diff images are written to the snapshot directory and the test is failed with a message showing the diff percentage and paths.
 
+An overload also accepts an explicit window handle, overriding the enclosing `VISUAL_DESCRIBE`'s (used by `VISUAL_DESCRIBE_COMPONENT`, below):
+
+```cpp
+ASSERT_SNAPSHOT("label", someWindowHandle);
+ASSERT_SNAPSHOT("label", someWindowHandle, DiffOptions{ .maxDifferencePercent = 0.5f });
+```
+
+### NAVIGATE
+
+Jumps the app under test straight to a named screen/route/state via a consumer-registered `NavigateFn`, bypassing `SEND`/`IEventInjector` entirely (`include/cimmerian/visual/navigation-driver.hpp`). This is for *reaching* a screen — real interaction tests still use `SEND`:
+
+```cpp
+// Once, in the consumer's test-main (or any static initializer) - bridges
+// Cimmerian's opaque screenKey to the app's own router/view-model/IPC:
+Cimmerian::Visual::ActiveNavigationDriver::GetInstance().Set([](const std::string& screenKey) {
+    App::Router::NavigateTo(screenKey);
+});
+
+VISUAL_DESCRIBE("Settings Panel", settingsPanelWindow, {
+    VISUAL_TEST("default state looks correct", {
+        NAVIGATE("settings");        // jumps straight there, no clicks
+        WAIT(50ms);
+        ASSERT_SNAPSHOT("default-state");
+    });
+
+    VISUAL_TEST("hover on save button", {
+        NAVIGATE("settings");
+        SEND(MouseMove(200, 340));   // the actual interaction under test
+        WAIT(16ms);
+        ASSERT_SNAPSHOT("save-button-hover");
+    });
+});
+```
+
+`NAVIGATE` throws if no `NavigateFn` has been registered — it is opt-in, not a silent no-op, since a `NAVIGATE` that quietly did nothing would let a following `ASSERT_SNAPSHOT` pass against whatever screen already happened to be showing.
+
+### VISUAL_DESCRIBE_COMPONENT
+
+A `VISUAL_DESCRIBE` group with no window handle of its own, for component-level tests where the window isn't known until each `VISUAL_TEST` mounts its own host. `MountComponent<T>` itself is consumer-supplied — Cimmerian only needs a `void*` window handle back, the same contract `IScreenCapture` already has:
+
+```cpp
+VISUAL_DESCRIBE_COMPONENT("SaveButton", {
+    VISUAL_TEST("default", {
+        auto host = MountComponent<SaveButton>(SaveButtonProps{ .label = "Save", .enabled = true });
+        WAIT(16ms);
+        ASSERT_SNAPSHOT("default", host.WindowHandle());
+    });
+
+    VISUAL_TEST("disabled", {
+        auto host = MountComponent<SaveButton>(SaveButtonProps{ .label = "Save", .enabled = false });
+        WAIT(16ms);
+        ASSERT_SNAPSHOT("disabled", host.WindowHandle());
+    });
+});
+```
+
+For components whose visual states are themselves interaction-driven (hover, pressed, focus-ring), `SEND` against the host window remains appropriate — the host is dedicated and disposable, so the unscoped-global-input risk below has nothing else on screen to collide with.
+
+`test/visual.test.cpp`'s `ScratchComponentHost`/`MountScratchComponent` stand in for a consumer's real `MountComponent<T>` — Cimmerian doesn't ship one, since the component/widget model is entirely consumer-specific (Amanuensis, pharos-proto, penumbra-proto would each need their own).
+
 ---
 
 ## Run Modes
@@ -364,6 +424,54 @@ CMake will gate the platform implementations behind `if(UNIX AND NOT APPLE)`, `i
 **X11 precondition on Wayland sessions:** X11 capture/injection can only see windows that exist in the X11 window tree. On a Wayland session (`XDG_SESSION_TYPE=wayland`), a window is only an X11/XWayland window if its toolkit explicitly opts into that — most Wayland-native toolkits default to their native Wayland backend instead, in which case the window never appears in the X11 tree at all, however visibly it's on screen. Common toolkits need an explicit env var set before launch to force X11/XWayland mode: `SDL_VIDEODRIVER=x11` (SDL3), `GDK_BACKEND=x11` (GTK4), `QT_QPA_PLATFORM=xcb` (Qt6). `X11ScreenCapture::Capture()` and the window-lookup helpers below warn and point at this when they can't find/attach to a window, but the env var itself is the actual fix.
 
 **Both injection backends are real, global OS input, unscoped to the target window.** Neither XTEST/X11 nor the Linux kernel `/dev/uinput` layer (`LinuxUinputEventInjector`) has a "scoped to this window" concept the way e.g. a browser automation tool's isolated page context does - coordinates are screen-absolute, and if the target window loses real OS focus mid-test (another app's notification, an alt-tab, a background process raising a window), the next injected event goes wherever focus actually is, not necessarily the window under test. This is a real risk when running visual regression tests against a live, multi-window developer desktop rather than a dedicated `Xvfb`/CI display; `X11EventInjector` checks focus via `XGetInputFocus` before each `SEND()` and warns (without refusing) if the target window isn't focused, but this narrows rather than eliminates the race.
+
+### Usage Guidance — which mechanism to reach for
+
+The suite currently supports two ways to get a window under test:
+building a scratch window inline (`test/visual.test.cpp`'s
+`CreateTestWindow()`) or driving a real, separately-launched application
+via `WaitForWindowByTitle`/`WaitForWindowByPid` below. In both cases,
+getting the *window* on screen is separate from getting the right
+*screen/state* within it on screen — the latter today only has one
+mechanism, real platform input injection (`SEND`), which is also what
+`ASSERT_SNAPSHOT`-adjacent interaction tests (hover, click, drag) use to
+exercise the thing actually under test.
+
+Guidance for which combination to use, now that `docs/
+cimmerian_navigation_without_platform_input_proposal.md`'s alternatives
+(`NAVIGATE`; `VISUAL_DESCRIBE_COMPONENT`) have landed:
+
+- **Testing one component's appearance** (a button's default/hover/
+  disabled states, a row's selected fill) — prefer `VISUAL_DESCRIBE_COMPONENT`
+  with the smallest window that can render it, built inline the way
+  `test/visual.test.cpp` does, not a full running app. Reserve `SEND` for
+  the states that are genuinely interaction-driven; construct static
+  states (disabled, error, empty) directly in whatever way the consumer's
+  component API allows, without needing an event at all.
+- **Testing a composed screen's layout** (does this panel look right with
+  real sibling components, does this route render correctly) — a
+  separately-launched real app is appropriate. Reach the screen with
+  `NAVIGATE` rather than a `SEND` click-through-the-UI sequence: every
+  `SEND` used purely to *navigate there* is a known reliability and safety
+  risk, not a neutral setup step — it's real, global, unscoped OS input
+  (`docs/cimmerian_live_app_visual_testing_gap.md` gaps 3-4), it can
+  silently no-op on some Linux compositors unless `Probe()`/
+  `IsFunctional()` is checked first (`docs/
+  cimmerian_wayland_xtest_injection_gap.md`, `docs/
+  cimmerian_uinput_no_functional_check_gap.md`), and a same-frame
+  press/release can be missed entirely by once-per-frame input polling
+  (`docs/cimmerian_mouse_click_no_hold_gap.md`). Keep `SEND` reserved for
+  tests that are actually about an interaction, once already on the right
+  screen.
+- **Running against a live, multi-window desktop at all** (as opposed to
+  a dedicated `Xvfb`/CI display) — expect occasional stray input if focus
+  shifts mid-sequence, and don't run visual suites unattended on a
+  machine someone is actively using. Prefer a dedicated display for CI.
+- **Whichever mechanism is used**, always call `Probe()` (or let
+  `VisualTestRunner::SetInjector()` do it) before trusting a "passing"
+  golden that involved any `SEND` — a captured snapshot proves the
+  screen looked a certain way, not that the input that got it there
+  actually landed.
 
 ### Testing a real, separately-launched application
 

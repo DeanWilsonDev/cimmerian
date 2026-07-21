@@ -3,6 +3,7 @@
 #include "visual/i-event-injector.hpp"
 #include "visual/i-screen-capture.hpp"
 #include "visual/image-diff.hpp"
+#include "visual/navigation-driver.hpp"
 #include "visual/screenshot.hpp"
 #include "visual/snapshot-store.hpp"
 #include "visual/ui-event.hpp"

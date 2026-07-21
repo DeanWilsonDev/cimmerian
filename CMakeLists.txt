@@ -35,6 +35,7 @@ add_library(
   src/snapshot/inline-snapshot-rewriter.cpp
   src/visual/stb-impl.cpp
   src/visual/active-registries.cpp
+  src/visual/navigation-driver.cpp
   src/visual/screenshot.cpp
   src/visual/image-diff.cpp
   src/visual/snapshot-store.cpp

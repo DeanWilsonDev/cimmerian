@@ -178,10 +178,20 @@ void VisualTestRunner::SendEvent(const UIEvent& event)
 
 void VisualTestRunner::AssertSnapshot(const std::string& label, const DiffOptions& options)
 {
+  this->AssertSnapshotAgainst(label, this->currentWindowHandle, options);
+}
+
+void VisualTestRunner::AssertSnapshot(const std::string& label, void* windowHandle, const DiffOptions& options)
+{
+  this->AssertSnapshotAgainst(label, windowHandle, options);
+}
+
+void VisualTestRunner::AssertSnapshotAgainst(const std::string& label, void* windowHandle, const DiffOptions& options)
+{
   const std::string groupName = this->currentGroupPath;
   const std::string testName = this->currentTestName ? this->currentTestName : "";
 
-  Screenshot actual = Screenshot::Capture(this->currentWindowHandle);
+  Screenshot actual = Screenshot::Capture(windowHandle);
 
   VisualSnapshotReportEntry entry;
   entry.groupName = groupName;

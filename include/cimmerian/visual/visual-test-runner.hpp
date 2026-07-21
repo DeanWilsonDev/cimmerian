@@ -65,6 +65,12 @@ public:
   void SendEvent(const UIEvent& event);
   void AssertSnapshot(const std::string& label, const DiffOptions& options = {});
 
+  // Overload for VISUAL_DESCRIBE_COMPONENT groups (no window handle at
+  // registration time): captures windowHandle directly instead of the
+  // current group's handle. See docs/
+  // cimmerian_navigation_without_platform_input_proposal.md Proposal B.
+  void AssertSnapshot(const std::string& label, void* windowHandle, const DiffOptions& options = {});
+
   static VisualTestRunner* GetActive() { return activeInstance; }
 
   const std::string& GetCurrentGroupPath() const { return this->currentGroupPath; }
@@ -90,6 +96,7 @@ private:
 
   bool MatchesFilter(const std::string& fullyQualifiedName) const;
   void WriteReport(VisualTestRunSummary* summary) const;
+  void AssertSnapshotAgainst(const std::string& label, void* windowHandle, const DiffOptions& options);
 };
 
 } // namespace Cimmerian::Visual

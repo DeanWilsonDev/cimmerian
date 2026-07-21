@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../test-macro-helpers.hpp"
+#include "navigation-driver.hpp"
 #include "ui-event.hpp"
 #include "visual-test-registry.hpp"
 #include "visual-test-runner.hpp"
@@ -30,6 +31,17 @@ inline Cimmerian::Visual::VisualTestGroup* _visual_test_group = nullptr;
     _visual_test_group = _saved;                                                                    \
     return true;                                                                                    \
   }();
+
+/* ################################# */
+/* ===== VISUAL_DESCRIBE_COMPONENT: */
+/* ################################# */
+/* A VISUAL_DESCRIBE whose group has no window handle of its own, because
+   the window isn't known until each VISUAL_TEST mounts its own
+   consumer-supplied component host - see docs/
+   cimmerian_navigation_without_platform_input_proposal.md Proposal B.
+   Pass the resulting host's window handle explicitly to ASSERT_SNAPSHOT. */
+
+#define VISUAL_DESCRIBE_COMPONENT(group_name, BODY) VISUAL_DESCRIBE(group_name, nullptr, BODY)
 
 /* ################################# */
 /* =========== VISUAL_TEST: ======== */
@@ -71,6 +83,17 @@ inline Cimmerian::Visual::VisualTestGroup* _visual_test_group = nullptr;
 
 #define ASSERT_SNAPSHOT(...)                                                                       \
   ::Cimmerian::Visual::VisualTestRunner::GetActive()->AssertSnapshot(__VA_ARGS__)
+
+/* ################################# */
+/* ============ NAVIGATE =========== */
+/* ################################# */
+/* Jumps the app under test straight to a named screen/route/state via the
+   consumer-registered NavigateFn, bypassing SEND()/IEventInjector entirely.
+   See docs/cimmerian_navigation_without_platform_input_proposal.md
+   Proposal A. */
+
+#define NAVIGATE(screenKey)                                                                       \
+  ::Cimmerian::Visual::ActiveNavigationDriver::GetInstance().NavigateTo((screenKey))
 
 /* ################################# */
 /* ==== EVENT CONSTRUCTOR SHIMS ==== */
