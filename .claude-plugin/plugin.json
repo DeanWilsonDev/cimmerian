@@ -1,0 +1,7 @@
+{
+  "name": "cimmerian",
+  "description": "Skills for writing and maintaining tests against the Cimmerian C++20 testing framework (unit, snapshot, and visual regression testing).",
+  "version": "1.0.0",
+  "author": { "name": "Dean Wilson" },
+  "license": "MIT"
+}
