@@ -1,0 +1,14 @@
+{
+  "name": "cimmerian",
+  "description": "Cimmerian's own plugin marketplace: the testing skill for projects that consume Cimmerian.",
+  "owner": {
+    "name": "Dean Wilson"
+  },
+  "plugins": [
+    {
+      "name": "cimmerian",
+      "source": "./",
+      "description": "Skills for writing and maintaining tests against the Cimmerian C++20 testing framework (unit, snapshot, and visual regression testing)."
+    }
+  ]
+}
