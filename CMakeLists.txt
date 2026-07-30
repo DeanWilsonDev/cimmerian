@@ -131,11 +131,19 @@ elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "Win32")
   target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_WIN32)
 
 elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "macOS")
-  target_sources(cimmerian PRIVATE src/visual/platform/macos-screen-capture.cpp
+  # macos-screen-capture.mm is Objective-C++: CGWindowListCreateImage and
+  # CGDisplayCreateImage were obsoleted in the macOS 15 SDK, so screen
+  # capture goes through ScreenCaptureKit instead.
+  enable_language(OBJCXX)
+  set_source_files_properties(src/visual/platform/macos-screen-capture.mm PROPERTIES
+                               COMPILE_FLAGS "-fobjc-arc")
+
+  target_sources(cimmerian PRIVATE src/visual/platform/macos-screen-capture.mm
                                     src/visual/platform/macos-event-injector.cpp
                                     src/visual/platform/macos-window-lookup.cpp)
   find_library(APPLICATION_SERVICES_FRAMEWORK ApplicationServices REQUIRED)
-  target_link_libraries(cimmerian PRIVATE ${APPLICATION_SERVICES_FRAMEWORK})
+  find_library(SCREEN_CAPTURE_KIT_FRAMEWORK ScreenCaptureKit REQUIRED)
+  target_link_libraries(cimmerian PRIVATE ${APPLICATION_SERVICES_FRAMEWORK} ${SCREEN_CAPTURE_KIT_FRAMEWORK})
   target_compile_definitions(cimmerian PUBLIC CIMMERIAN_VISUAL_PLATFORM_MACOS)
 endif()
 
@@ -200,15 +208,37 @@ endif()
 
 if(CIMMERIAN_BUILD_TESTS)
   enable_language(CXX)
-  add_executable(test_cimmerian test/test-main.cpp test/example.test.cpp
-                                 test/snapshot.test.cpp test/visual.test.cpp)
+
+  # test/visual.test.cpp needs a real window to screenshot; it gets one from
+  # a per-platform scratch-window backend (test/support/scratch-window-*),
+  # selected the same way the library's own platform backend is above. Only
+  # add visual.test.cpp (and its backend) where one exists.
+  set(_CIMMERIAN_TEST_SOURCES test/test-main.cpp test/example.test.cpp test/snapshot.test.cpp)
+
+  if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11" OR CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-uinput"
+     OR CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-auto")
+    # All three Linux backends use X11ScreenCapture (see the comment above
+    # CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT); only injection differs.
+    list(APPEND _CIMMERIAN_TEST_SOURCES test/visual.test.cpp test/support/scratch-window-x11.cpp)
+  elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "macOS")
+    list(APPEND _CIMMERIAN_TEST_SOURCES test/visual.test.cpp test/support/scratch-window-macos.mm)
+  else()
+    message(STATUS "Cimmerian: no scratch-window test backend for CIMMERIAN_VISUAL_PLATFORM="
+                    "${CIMMERIAN_VISUAL_PLATFORM} yet; skipping visual.test.cpp self-tests")
+  endif()
+
+  add_executable(test_cimmerian ${_CIMMERIAN_TEST_SOURCES})
   target_link_libraries(test_cimmerian PRIVATE cimmerian)
 
-  if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11" OR CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-uinput")
-    # test/visual.test.cpp creates its own scratch X11 window to screenshot
-    # (both platforms use X11ScreenCapture; only injection differs).
+  if(CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11" OR CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-uinput"
+     OR CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-auto")
     target_include_directories(test_cimmerian PRIVATE ${X11_INCLUDE_DIR})
     target_link_libraries(test_cimmerian PRIVATE ${X11_LIBRARIES})
+  elseif(CIMMERIAN_VISUAL_PLATFORM STREQUAL "macOS")
+    set_source_files_properties(test/support/scratch-window-macos.mm PROPERTIES
+                                 COMPILE_FLAGS "-fobjc-arc")
+    find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
+    target_link_libraries(test_cimmerian PRIVATE ${APPKIT_FRAMEWORK})
   endif()
 
   # tests are C++
