@@ -8,9 +8,49 @@
 
 ## Read first
 
-- **macOS capture-timing flakiness — second fix landed, closes the traced
-  gap; not yet re-verified against `pharos-proto` (2026-08-14, second
-  follow-up pass same day).** Original root cause (see git history on this
+- **macOS capture-timing flakiness — both fixes stay, but neither was ever
+  this repo's bug. Root-caused in `pharos-proto` to that repo's own test
+  harness, not `cimmerian`'s capture code (2026-08-14, third pass same
+  day).** Re-verified `c846354` directly against the original `pharos-proto`
+  repro (20-30 repeated runs against freshly-recaptured goldens, matching the
+  first fix's own verification methodology): no improvement (0/16 clean in
+  one batch) and real added latency from the retry loop. Crucially, neither
+  fix's `TEST_LOG_WARN` fallback ever fired across ~60 combined verification
+  runs on the `pharos-proto` side — both fixes' own internal consistency
+  checks (frame-reads-agree; then captured-size-matches-requested-size)
+  passed every single time. That's conclusive: the window's real on-screen
+  geometry is already fixed *before* `MacOSScreenCapture::Capture` ever runs,
+  so nothing at this layer — however much polling or retrying — could ever
+  have closed this gap. It was never a capture-code race.
+
+  **Real root cause, found in `pharos-proto`'s own test harness:** confirmed
+  directly against the test machine's screen (`NSScreen.main.frame` =
+  `(0, 0, 1512, 982)` pts, `backingScaleFactor` `2.0` — a clean scale, not a
+  fractional-rounding issue). `pharos-proto`'s `pharos_in_process_host.cpp`
+  requests a `1600×900`-point test window, which is *wider than the screen
+  itself* (1512pt) — macOS has to clamp/negotiate that to fit, and the
+  negotiated result varies by ~2pt on both axes between separate window
+  creations. A second, differently-shaped case in the same repo
+  (`inspector_component_host.cpp`, a 360×700 window that fits the screen
+  easily) still jitters ~2pt on height alone, consistent with
+  `SCShareableContent`'s window frame including title-bar chrome with a
+  couple points of finalization jitter. Neither is anything `cimmerian` can
+  see or fix from inside `Capture` — both originate in how the target
+  application's own window gets created and negotiated with the window
+  server, before any capture call happens. Full trace, with exact point
+  numbers and file:line citations, is in `pharos-proto/docs/next_steps.md`'s
+  "Visual-test capture-timing flakiness" entry.
+
+  **Neither `bde855b` nor `c846354` is being reverted.** Both are real,
+  independently-useful fixes for a genuine (if rarer, or simply not what
+  triggered this specific repro) mid-resize capture race — `c846354`'s own
+  check never producing a false rejection across every verification run here
+  is itself evidence it isn't introducing bad behavior, only unnecessary
+  latency on captures that were already fine. They're just not the fix for
+  *this* bug, since this bug's cause sits upstream of anything this repo's
+  capture code can observe.
+
+  Original root cause this whole thread started from (see git history on this
   entry for the full original analysis): `MacOSScreenCapture::Capture` read
   `targetWindow.frame` once from a single `SCShareableContent` snapshot,
   before the async `SCScreenshotManager` capture completed, with no
@@ -45,13 +85,14 @@
   extracted as a shared helper (window and display paths both use it now)
   with no behavior change to the display path.
 
-  **Verified by build + 20 live runs against this repo's own scratch windows
-  this pass — 0 failures, 0 "did not stabilize"/"still didn't match"
+  **Verified at the time by build + 20 live runs against this repo's own
+  scratch windows — 0 failures, 0 "did not stabilize"/"still didn't match"
   warnings** — but, same caveat as the first fix's initial verification,
   this repo's static scratch windows have never reproduced the original
-  race themselves; only `pharos-proto`'s suite has. **Not yet re-verified
-  against `pharos-proto`** — that's the real test of whether the gap is
-  actually closed, not just plausible from tracing the failure mode.
+  race themselves; only `pharos-proto`'s suite has. **Re-verified against
+  `pharos-proto` in the third pass above, and it didn't close the gap** —
+  see the top of this entry for why (the real cause was never in this
+  repo's capture code).
 
 - **X11 capture-timing flakiness (2026-08-14)** — traced from
   `pharos-proto/docs/next_steps.md`'s "Visual-test capture-timing
@@ -93,15 +134,13 @@
 
 ## What's actually left open
 
-- **macOS capture-timing flakiness needs re-verification against the
-  original `pharos-proto` repro** (see "Read first" above): the second fix
-  (`CaptureWindowStable`, checking captured-image size against the resolved
-  frame and retrying the whole cycle on mismatch) is only verified against
-  this repo's own scratch windows, which have never reproduced the race
-  themselves. Needs `pharos-proto` to bump its `cimmerian` pin again,
-  re-capture goldens against the new fix, and re-run
-  `pharos_visual_tests` 20x back-to-back (mirroring the first fix's
-  verification) before trusting the gap is actually closed.
+- **macOS capture-timing flakiness — closed on this repo's side** (see "Read
+  first" above): re-verified against the original `pharos-proto` repro and
+  root-caused to that repo's own test harness (an oversized test window, and
+  a title-bar-inclusive frame measurement), not `cimmerian`. Nothing left to
+  do here unless `pharos-proto`'s own fix (tracked in its own
+  `docs/next_steps.md`) surfaces a genuine capture-code gap once applied —
+  not expected, but worth a glance if it comes back.
 - **X11 capture-stability-polling fix needs real verification** (see "Read
   first" above): compile + run this repo's own `pharos_visual_tests`-style
   suite (or `test_cimmerian`'s visual tests) against a real X11/compositor
@@ -126,22 +165,33 @@
 
 ## What changed this session
 
-Closed the remaining gap in the macOS capture-timing fix (see "Read first"
-above for why the first fix wasn't enough):
+**Third pass, same day — no code change, a re-verification + root-cause
+correction.** Prior passes this same day landed two capture-side fixes
+(`bde855b`, `c846354`, see "Read first" above for both). This pass
+re-verified `c846354` directly against the original `pharos-proto` repro
+(the same one that caught `bde855b`'s own gap) instead of only this repo's
+own scratch windows, and found it didn't help — then traced the actual cause
+to `pharos-proto`'s own test harness (an oversized test window relative to
+the real screen, plus a title-bar-inclusive frame measurement in a second
+test), not anything in this repo's capture code. Both fixes are being kept
+(real, independently-useful improvements against a genuine but different
+race) — see "Read first" for the full trace and reasoning, and
+`pharos-proto/docs/next_steps.md`'s own entry for the fix that actually
+needs to land, in that repo.
 
-- `src/visual/platform/macos-screen-capture.mm`: extracted
-  `CaptureWindowStable`, which wraps the whole resolve-frame + build-config +
-  capture cycle in a retry loop (up to 4 attempts) instead of trusting
-  `ResolveStableWindowTarget`'s pre-capture poll alone. After each capture it
-  compares the returned image's actual `CGImageGetWidth`/`GetHeight` against
-  the `config.width`/`height` the resolved frame predicted; a mismatch
-  retries the whole cycle rather than just re-polling the frame. Falls back
-  to the last capture with a `TEST_LOG_WARN` if all attempts still mismatch.
-  Also extracted `MakeConfig` as a shared helper used by both the window and
-  display capture paths (no behavior change to the display path).
-- Verified with a real build + live run on this Darwin machine: configured a
-  separate `-DCIMMERIAN_BUILD_TESTS=ON` build tree, compiled clean, and ran
-  `test_cimmerian` 20x back-to-back against real on-screen scratch windows —
-  0 failures, 0 "did not stabilize"/"still didn't match" warnings. Not yet
-  re-verified against the original `pharos-proto` repro (see "What's
-  actually left open").
+Earlier this same day: closed the gap `bde855b` left open (see "Read first"
+for why that fix wasn't enough) by extracting `CaptureWindowStable` in
+`src/visual/platform/macos-screen-capture.mm`, which wraps the whole
+resolve-frame + build-config + capture cycle in a retry loop (up to 4
+attempts) instead of trusting `ResolveStableWindowTarget`'s pre-capture poll
+alone — after each capture it compares the returned image's actual
+`CGImageGetWidth`/`GetHeight` against the `config.width`/`height` the
+resolved frame predicted, retrying the whole cycle on mismatch rather than
+just re-polling the frame, and falling back to the last capture with a
+`TEST_LOG_WARN` if all attempts still mismatch. Also extracted `MakeConfig`
+as a shared helper used by both the window and display capture paths (no
+behavior change to the display path). Verified at the time with a real
+build + 20 live runs against this repo's own scratch windows — 0 failures,
+0 warnings — which this pass's re-verification against `pharos-proto` shows
+wasn't sufficient to prove the actual race was closed, since this repo's own
+scratch windows never reproduced it in the first place.
