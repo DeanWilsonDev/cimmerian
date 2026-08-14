@@ -4,9 +4,33 @@
 > the end of each work session; supersedes its own previous contents
 > rather than accumulating history (the individual gap/spec docs are the
 > durable record).
-> Last updated: 2026-07-21.
+> Last updated: 2026-08-14.
 
 ## Read first
+
+- **X11 capture-timing flakiness (2026-08-14)** — traced from
+  `pharos-proto/docs/next_steps.md`'s "Visual-test capture-timing
+  flakiness" open item, which suspected a compositor/X11 vsync race in
+  this repo's capture path (`XGetImage` reading before the target app's
+  presented buffer is actually flipped) rather than an application bug.
+  Confirmed: `src/visual/platform/x11-screen-capture.cpp`'s `Capture` did
+  a single unsynchronized `XGetImage` with no wait for the compositor to
+  settle — `XSync` on this process's own connection can't help, since the
+  target app renders/presents on a *different* X connection and GPU
+  timeline. Fixed by polling: capture repeatedly (up to 8x, 16ms apart)
+  until two consecutive captures are pixel-identical, treating agreement
+  as the real "stopped changing" signal instead of a fixed guessed delay;
+  logs a warning and returns the last frame if it never stabilizes rather
+  than hanging. macOS's `ScreenCaptureKit`-based capture doesn't have this
+  problem (it reads already-composited output synchronously), so only
+  `x11-screen-capture.cpp` changed. **Not yet build- or live-verified**:
+  this session ran on a Darwin machine with no X11 headers/Xvfb
+  available, so `CIMMERIAN_VISUAL_PLATFORM` defaults to `macOS` and
+  `x11-screen-capture.cpp` isn't even part of this build here — reviewed
+  carefully by hand instead. Needs a real compile + a live run against an
+  actual X11/compositor session (this repo's own visual tests, or
+  pharos-proto's) before trusting it fixes the flakiness pharos-proto
+  measured.
 
 - `docs/cimmerian_navigation_without_platform_input_proposal.md` —
   implemented this session: `NAVIGATE`/`ActiveNavigationDriver` (Proposal
@@ -24,6 +48,12 @@
 
 ## What's actually left open
 
+- **X11 capture-stability-polling fix needs real verification** (see "Read
+  first" above): compile + run this repo's own `pharos_visual_tests`-style
+  suite (or `test_cimmerian`'s visual tests) against a real X11/compositor
+  session, ideally the same machine/setup that measured pharos-proto's
+  ~77%→~90% pass-rate-with-3-PumpFrame baseline, to confirm the flakiness
+  is actually gone rather than just plausible from code review.
 - **`MountComponent<T>`'s exact API and `NavigateFn`'s out-of-process
   transport** were explicitly left for a design pass with a real consumer
   (Amanuensis, pharos-proto, penumbra-proto) — `test/visual.test.cpp`'s

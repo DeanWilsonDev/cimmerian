@@ -1,8 +1,10 @@
 #include "cimmerian/visual/platform/x11-screen-capture.hpp"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
+#include <thread>
 #include "cimmerian/test-log.hpp"
 
 namespace Cimmerian::Visual {
@@ -31,21 +33,10 @@ unsigned char ExtractChannel(unsigned long pixel, unsigned long mask)
   return static_cast<unsigned char>((value * 255) / maxValue);
 }
 
-} // namespace
-
-Screenshot X11ScreenCapture::Capture(void* windowHandle)
+Screenshot CaptureOnce(Display* display, Window window)
 {
-  Display* display = XOpenDisplay(nullptr);
-  if (!display) {
-    throw std::runtime_error("X11ScreenCapture: unable to open X display (is $DISPLAY set?)");
-  }
-
-  const Window window =
-      windowHandle ? static_cast<Window>(reinterpret_cast<uintptr_t>(windowHandle)) : DefaultRootWindow(display);
-
   XWindowAttributes attributes;
   if (!XGetWindowAttributes(display, window, &attributes)) {
-    XCloseDisplay(display);
     TEST_LOG_WARN(
         "X11ScreenCapture: XGetWindowAttributes failed for the given window "
         "handle - if the target app uses a Wayland-native toolkit (SDL3, "
@@ -60,7 +51,6 @@ Screenshot X11ScreenCapture::Capture(void* windowHandle)
   XImage* image =
       XGetImage(display, window, 0, 0, attributes.width, attributes.height, AllPlanes, ZPixmap);
   if (!image) {
-    XCloseDisplay(display);
     throw std::runtime_error("X11ScreenCapture: XGetImage failed");
   }
 
@@ -81,9 +71,58 @@ Screenshot X11ScreenCapture::Capture(void* windowHandle)
   }
 
   XDestroyImage(image);
-  XCloseDisplay(display);
-
   return shot;
+}
+
+// A compositing window manager presents a client's freshly-rendered frame to
+// the desktop on its own timeline, asynchronous to this process's XGetImage
+// request - there's no single-connection XSync that waits for that, since
+// the target app's render+present happens on a different X connection (and
+// GPU timeline) than this capture connection. Polling until two consecutive
+// captures agree is a real signal the window has actually stopped changing,
+// unlike a fixed delay, which is either too short (still racy) or wastefully
+// long. See docs/next_steps.md for the flakiness this was written to fix.
+constexpr int kMaxStabilityAttempts = 8;
+constexpr std::chrono::milliseconds kStabilityPollInterval{16};
+
+} // namespace
+
+Screenshot X11ScreenCapture::Capture(void* windowHandle)
+{
+  Display* display = XOpenDisplay(nullptr);
+  if (!display) {
+    throw std::runtime_error("X11ScreenCapture: unable to open X display (is $DISPLAY set?)");
+  }
+
+  const Window window =
+      windowHandle ? static_cast<Window>(reinterpret_cast<uintptr_t>(windowHandle)) : DefaultRootWindow(display);
+
+  try {
+    Screenshot previous = CaptureOnce(display, window);
+    for (int attempt = 1; attempt < kMaxStabilityAttempts; ++attempt) {
+      std::this_thread::sleep_for(kStabilityPollInterval);
+      Screenshot next = CaptureOnce(display, window);
+      if (next.width == previous.width && next.height == previous.height && next.pixels == previous.pixels) {
+        XCloseDisplay(display);
+        return next;
+      }
+      previous = std::move(next);
+    }
+
+    TEST_LOG_WARN(
+        "X11ScreenCapture: capture did not stabilize across {} attempts (~{} ms) "
+        "- returning the last frame anyway; this can mean a genuine compositor/"
+        "vsync race (a stale pre-present frame) or a window that's still "
+        "actually animating/changing",
+        kMaxStabilityAttempts, kMaxStabilityAttempts * kStabilityPollInterval.count()
+    );
+    XCloseDisplay(display);
+    return previous;
+  }
+  catch (...) {
+    XCloseDisplay(display);
+    throw;
+  }
 }
 
 } // namespace Cimmerian::Visual
