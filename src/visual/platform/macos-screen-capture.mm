@@ -125,6 +125,55 @@ ResolvedWindowTarget ResolveStableWindowTarget(CGWindowID windowID)
   return current;
 }
 
+SCStreamConfiguration* MakeConfig(SCContentFilter* filter, CGRect frame)
+{
+  SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
+  const float pixelScale = filter.pointPixelScale > 0 ? filter.pointPixelScale : 1.0F;
+  config.width = static_cast<size_t>(frame.size.width * pixelScale);
+  config.height = static_cast<size_t>(frame.size.height * pixelScale);
+  config.showsCursor = NO;
+  config.captureResolution = SCCaptureResolutionBest;
+  config.ignoreShadowsSingleWindow = YES;
+  return config;
+}
+
+// ResolveStableWindowTarget only confirms the window's frame was stable up
+// to its *last* read - there's still a gap between that read and the moment
+// CaptureImageSync's async completion handler actually fires, in which the
+// window can change again. Confirmed empirically (pharos-proto repro, 2026-
+// 08-14 follow-up): ResolveStableWindowTarget's own "did not stabilize"
+// warning never fired across ~30 verification runs, yet captures still came
+// back a few pixels off on one axis - i.e. it kept finding two agreeing
+// pre-capture reads, then losing the race after that. Close the gap by
+// checking the ground truth - the captured image's actual dimensions -
+// against what the resolved frame predicted, and retrying the whole
+// resolve+capture cycle (not just the pre-capture poll) if they disagree.
+CGImageRef CaptureWindowStable(CGWindowID windowID)
+{
+  constexpr int kMaxCaptureAttempts = 4;
+
+  CGImageRef lastImage = nullptr;
+  for (int attempt = 0; attempt < kMaxCaptureAttempts; ++attempt) {
+    if (lastImage) {
+      CGImageRelease(lastImage);
+    }
+
+    ResolvedWindowTarget resolved = ResolveStableWindowTarget(windowID);
+    SCStreamConfiguration* config = MakeConfig(resolved.filter, resolved.frame);
+    lastImage = CaptureImageSync(resolved.filter, config);
+
+    if (CGImageGetWidth(lastImage) == config.width && CGImageGetHeight(lastImage) == config.height) {
+      return lastImage;
+    }
+  }
+
+  TEST_LOG_WARN("MacOSScreenCapture: captured image size still didn't match the last confirmed-stable "
+                "window frame after {} full resolve+capture attempts - window may still be resizing; "
+                "returning the last capture anyway",
+                kMaxCaptureAttempts);
+  return lastImage;
+}
+
 } // namespace
 
 Screenshot MacOSScreenCapture::Capture(void* windowHandle)
@@ -133,13 +182,10 @@ Screenshot MacOSScreenCapture::Capture(void* windowHandle)
     const CGWindowID windowID =
         windowHandle ? static_cast<CGWindowID>(reinterpret_cast<uintptr_t>(windowHandle)) : kCGNullWindowID;
 
-    SCContentFilter* filter = nil;
-    CGRect frame = CGRectZero;
+    CGImageRef image = nullptr;
 
     if (windowID != kCGNullWindowID) {
-      ResolvedWindowTarget resolved = ResolveStableWindowTarget(windowID);
-      filter = resolved.filter;
-      frame = resolved.frame;
+      image = CaptureWindowStable(windowID);
     }
     else {
       SCShareableContent* content = FetchShareableContentSync();
@@ -155,19 +201,10 @@ Screenshot MacOSScreenCapture::Capture(void* windowHandle)
         throw std::runtime_error("MacOSScreenCapture: main display not found in shareable content (Screen "
                                   "Recording permission may be missing)");
       }
-      filter = [[SCContentFilter alloc] initWithDisplay:mainDisplay excludingWindows:@[]];
-      frame = mainDisplay.frame;
+      SCContentFilter* filter = [[SCContentFilter alloc] initWithDisplay:mainDisplay excludingWindows:@[]];
+      SCStreamConfiguration* config = MakeConfig(filter, mainDisplay.frame);
+      image = CaptureImageSync(filter, config);
     }
-
-    SCStreamConfiguration* config = [[SCStreamConfiguration alloc] init];
-    const float pixelScale = filter.pointPixelScale > 0 ? filter.pointPixelScale : 1.0F;
-    config.width = static_cast<size_t>(frame.size.width * pixelScale);
-    config.height = static_cast<size_t>(frame.size.height * pixelScale);
-    config.showsCursor = NO;
-    config.captureResolution = SCCaptureResolutionBest;
-    config.ignoreShadowsSingleWindow = YES;
-
-    CGImageRef image = CaptureImageSync(filter, config);
 
     const std::size_t width = CGImageGetWidth(image);
     const std::size_t height = CGImageGetHeight(image);

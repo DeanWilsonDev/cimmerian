@@ -8,49 +8,50 @@
 
 ## Read first
 
-- **macOS capture-timing flakiness — partial fix only, re-verified against
-  `pharos-proto` and still flaky (2026-08-14, follow-up pass same day).**
-  Original root cause (see git history on this entry for the full original
-  analysis): `src/visual/platform/macos-screen-capture.mm`'s
-  `MacOSScreenCapture::Capture` read `targetWindow.frame` once from a single
-  `SCShareableContent` snapshot, before the async `SCScreenshotManager`
-  capture completed, with no re-check — a stale-*size* race, distinct from
-  the X11 stale-*pixel-content* race below.
+- **macOS capture-timing flakiness — second fix landed, closes the traced
+  gap; not yet re-verified against `pharos-proto` (2026-08-14, second
+  follow-up pass same day).** Original root cause (see git history on this
+  entry for the full original analysis): `MacOSScreenCapture::Capture` read
+  `targetWindow.frame` once from a single `SCShareableContent` snapshot,
+  before the async `SCScreenshotManager` capture completed, with no
+  re-check — a stale-*size* race, distinct from the X11 stale-*pixel-content*
+  race below.
 
-  **First fix (this same day, see "What changed" further down):** extracted
-  `ResolveStableWindowTarget`, polling `SCShareableContent`/`targetWindow.frame`
-  (up to 8x, 16ms apart) until two consecutive reads agree via
-  `CGRectEqualToRect`, before committing to `config.width`/`config.height`.
-  Verified at the time with 15 back-to-back live runs against this repo's own
-  scratch windows, 0 failures — but that verification never re-ran the actual
-  original repro (`pharos-proto`'s `pharos_visual_tests`), just this repo's
-  own, differently-shaped scratch-window tests.
+  **First fix** extracted `ResolveStableWindowTarget`, polling
+  `SCShareableContent`/`targetWindow.frame` (up to 8x, 16ms apart) until two
+  consecutive reads agree via `CGRectEqualToRect`. Verified at the time
+  against this repo's own scratch windows only (15 clean runs) — re-verified
+  directly against the original repro (`pharos-proto` bumped its pin to
+  `bde855b`, re-captured goldens against the fixed code, ran
+  `pharos_visual_tests` 20x): only 6/20 clean. Root-caused the remainder to a
+  gap the first fix didn't cover — `ResolveStableWindowTarget`'s own "did not
+  stabilize" warning never fired in ~30 combined runs (it kept finding two
+  agreeing *pre-capture* reads), yet captures still came back height-off by a
+  discrete ~4px — meaning the window could still change *after* the poll's
+  last confirming read but *before* `CaptureImageSync`'s completion handler
+  actually fired, and nothing re-confirmed the frame at that point.
 
-  **Re-verified directly against the original repro and the flakiness is
-  still there, just narrower.** `pharos-proto` bumped its `cimmerian` pin to
-  this fix (`bde855b`), re-captured its goldens against the fixed code (so
-  the comparison is fair — not stale goldens), then ran
-  `pharos_visual_tests` 20x back-to-back: only 6/20 runs were fully clean.
-  The failure shape changed from before the fix (previously both width and
-  height could be off by ~4px) to **height-only, a discrete two-state
-  value** — e.g. one specific test (`Inspector Panel (component) > data
-  loaded with no selection`) came back consistently at *either* 1464 or 1468
-  px tall, never in between, across many repeated captures of the same
-  static (non-animating) window state. Width was always correct in every
-  observed failure.
+  **Second fix (this pass): closes that gap by checking ground truth instead
+  of another indirect frame read.** Extracted `CaptureWindowStable`, which
+  wraps the *entire* resolve+capture cycle (not just the pre-capture poll) in
+  a retry loop (up to 4 attempts): resolve a stable frame, build the capture
+  config from it, capture, then compare the *actual* `CGImageGetWidth`/
+  `GetHeight` of the returned image against the `config.width`/`height` that
+  frame predicted. A mismatch means the window changed in the gap the first
+  fix couldn't see — retry the whole cycle rather than trusting the
+  pre-capture read further. Falls back to returning the last capture with a
+  `TEST_LOG_WARN` if all 4 attempts still mismatch, same "don't hang, warn
+  and return something" shape as both earlier fixes. `MakeConfig` was
+  extracted as a shared helper (window and display paths both use it now)
+  with no behavior change to the display path.
 
-  **Root cause of the remaining gap, not yet fixed:** `TEST_LOG_WARN`'s
-  "did not stabilize" message (the fallback path when the poll never finds
-  two agreeing reads) never fired in any of the ~30 combined verification
-  runs across both sessions — confirmed by grepping test output. That means
-  `ResolveStableWindowTarget` *is* finding two consecutive agreeing reads
-  every time; the two-state jitter must be happening in the gap the fix
-  doesn't cover: between `ResolveStableWindowTarget`'s last confirming read
-  and the actual `CaptureImageSync(filter, config)` call
-  (`macos-screen-capture.mm`, `Capture`'s body) — nothing re-confirms the
-  frame is still the same size at the moment the real capture request goes
-  out. The fix narrowed the race's window and reduced its typical magnitude
-  (was ~4px on either axis, now ~4px on height only), it didn't close it.
+  **Verified by build + 20 live runs against this repo's own scratch windows
+  this pass — 0 failures, 0 "did not stabilize"/"still didn't match"
+  warnings** — but, same caveat as the first fix's initial verification,
+  this repo's static scratch windows have never reproduced the original
+  race themselves; only `pharos-proto`'s suite has. **Not yet re-verified
+  against `pharos-proto`** — that's the real test of whether the gap is
+  actually closed, not just plausible from tracing the failure mode.
 
 - **X11 capture-timing flakiness (2026-08-14)** — traced from
   `pharos-proto/docs/next_steps.md`'s "Visual-test capture-timing
@@ -92,17 +93,15 @@
 
 ## What's actually left open
 
-- **macOS capture-timing flakiness is still open** (see "Read first" above):
-  `ResolveStableWindowTarget`'s poll only confirms the frame is stable up to
-  the moment of its *last read* — there's still an unguarded gap between
-  that read and the actual `CaptureImageSync` call in `Capture` where the
-  window can change again. A real fix likely needs one of: re-reading
-  `targetWindow.frame` a final time immediately before (or after)
-  `CaptureImageSync` and retrying the whole capture if it changed, or
-  polling on the *returned image's* actual `CGImageGetWidth`/`GetHeight`
-  against the expected size instead of only trusting the pre-capture frame
-  read. Not attempted here — flagging the gap, not guessing at the shape
-  under time pressure the way the first pass's fix arguably did.
+- **macOS capture-timing flakiness needs re-verification against the
+  original `pharos-proto` repro** (see "Read first" above): the second fix
+  (`CaptureWindowStable`, checking captured-image size against the resolved
+  frame and retrying the whole cycle on mismatch) is only verified against
+  this repo's own scratch windows, which have never reproduced the race
+  themselves. Needs `pharos-proto` to bump its `cimmerian` pin again,
+  re-capture goldens against the new fix, and re-run
+  `pharos_visual_tests` 20x back-to-back (mirroring the first fix's
+  verification) before trusting the gap is actually closed.
 - **X11 capture-stability-polling fix needs real verification** (see "Read
   first" above): compile + run this repo's own `pharos_visual_tests`-style
   suite (or `test_cimmerian`'s visual tests) against a real X11/compositor
@@ -127,16 +126,22 @@
 
 ## What changed this session
 
-Fixed the macOS capture-timing flakiness documented above:
+Closed the remaining gap in the macOS capture-timing fix (see "Read first"
+above for why the first fix wasn't enough):
 
 - `src/visual/platform/macos-screen-capture.mm`: extracted
-  `ResolveStableWindowTarget`, which polls (up to 8x, 16ms apart) re-fetching
-  `SCShareableContent` and re-reading the target window's `frame` until two
-  consecutive reads agree via `CGRectEqualToRect`, before committing to
-  `config.width`/`config.height`. `MacOSScreenCapture::Capture`'s window path
-  now calls this instead of reading `frame` once; the display-capture path is
-  unchanged.
+  `CaptureWindowStable`, which wraps the whole resolve-frame + build-config +
+  capture cycle in a retry loop (up to 4 attempts) instead of trusting
+  `ResolveStableWindowTarget`'s pre-capture poll alone. After each capture it
+  compares the returned image's actual `CGImageGetWidth`/`GetHeight` against
+  the `config.width`/`height` the resolved frame predicted; a mismatch
+  retries the whole cycle rather than just re-polling the frame. Falls back
+  to the last capture with a `TEST_LOG_WARN` if all attempts still mismatch.
+  Also extracted `MakeConfig` as a shared helper used by both the window and
+  display capture paths (no behavior change to the display path).
 - Verified with a real build + live run on this Darwin machine: configured a
   separate `-DCIMMERIAN_BUILD_TESTS=ON` build tree, compiled clean, and ran
-  `test_cimmerian` 15x back-to-back against real on-screen scratch windows —
-  0 failures, 0 snapshot diffs across all runs.
+  `test_cimmerian` 20x back-to-back against real on-screen scratch windows —
+  0 failures, 0 "did not stabilize"/"still didn't match" warnings. Not yet
+  re-verified against the original `pharos-proto` repro (see "What's
+  actually left open").
