@@ -8,46 +8,36 @@
 
 ## Read first
 
-- **macOS capture-timing flakiness — a new, different bug from the X11 one below
-  (2026-08-14)** — found in `pharos-proto` while verifying that repo's own visual
-  regression suite after replacing its stale Linux goldens with freshly-captured
-  macOS ones: `pharos_visual_tests` intermittently reports "100% different" on
-  1-2 of 6 tests, with `.actual.png` a few pixels smaller than its golden in
-  width and/or height (e.g. 708×1440 vs. golden 712×1444) — confirmed by `sips`
-  on several failing captures. Confirmed non-systemic, not a bad golden: an
-  immediate rerun of the same test passes clean with no snapshot changes.
+- **macOS capture-timing flakiness — fixed and live-verified (2026-08-14)** —
+  root-caused in an earlier pass this same day (see the git history on this
+  entry for the original `pharos-proto` repro/analysis) to
+  `src/visual/platform/macos-screen-capture.mm`'s `MacOSScreenCapture::Capture`
+  reading `targetWindow.frame` once from a single `SCShareableContent`
+  snapshot, before the async `SCScreenshotManager` capture completes, with no
+  re-check — a stale-*size* race, distinct from the X11 stale-*pixel-content*
+  race below.
 
-  **Root cause traced to `src/visual/platform/macos-screen-capture.mm`'s
-  `MacOSScreenCapture::Capture`, not yet fixed.** `frame = targetWindow.frame`
-  (line 96) reads the target window's size once, from the `SCShareableContent`
-  snapshot `FetchShareableContentSync()` enumerates at the *start* of `Capture`
-  (line 78) — `config.width`/`config.height` (lines 117-118) are computed from
-  that one `frame` value and handed to `SCScreenshotManager
-  captureImageWithFilter:configuration:` (line 49) as a fixed target size.
-  There's no re-check that the window's actual size still matches `frame` by
-  the time the asynchronous capture completes, and no retry/stability loop at
-  this layer or its only caller (`Screenshot::Capture`,
-  `src/visual/screenshot.cpp:9-18`, a bare pass-through with no settle logic of
-  its own). If the target window is still resizing/settling (e.g. right after
-  window creation or a state transition in the test) when
-  `FetchShareableContentSync()` enumerates it, `targetWindow.frame` is stale by
-  a few points relative to the window's true size at actual-capture time — the
-  captured image comes back a few pixels off, exactly the symptom observed.
+  **Fixed by extracting `ResolveStableWindowTarget`**, which re-fetches
+  `SCShareableContent` and re-reads `targetWindow.frame` in a loop (up to 8x,
+  16ms apart) until two consecutive reads agree, only then handing that frame
+  to `config.width`/`config.height` — the same "agreement is the real signal"
+  shape as the X11 poll below, but comparing frame *size* via
+  `CGRectEqualToRect` instead of pixel content, since ScreenCaptureKit already
+  reads composited pixels synchronously (no compositor-flip race to poll for
+  there). Logs a warning and uses the last-read frame if it never stabilizes,
+  same fallback shape as X11. The whole-display capture path (`windowHandle ==
+  nullptr`) is untouched — a display's frame doesn't race like a
+  window-in-motion does.
 
-  **This is a different bug from the X11 flakiness below, not the same one on
-  a new platform.** The X11 fix (`fc33eb0`) explicitly assumed macOS capture
-  "doesn't have this problem (it reads already-composited output
-  synchronously)" and left `macos-screen-capture.mm` untouched — that
-  assumption covered *stale pixel content at a fixed, correct size* (the X11
-  failure mode: compositor hadn't flipped the presented buffer), but not *the
-  window's size itself being stale* at the moment of the size-determining
-  `frame` read, which this finding shows macOS capture can still race. A fix
-  here would need a different shape than X11's "poll until two captures agree"
-  (that assumes a fixed frame size and compares pixel content) — more likely,
-  re-reading `targetWindow.frame`/re-fetching shareable content immediately
-  before `CaptureImageSync`, or polling until two consecutive `frame` reads
-  agree, before committing to a `config.width`/`config.height`. Not
-  implemented here — flagging the gap and its root cause, not fixing it.
+  **Build- and live-verified this session** (unlike the X11 fix below, this
+  ran on the Darwin machine that has the real toolchain): `cmake
+  -DCIMMERIAN_BUILD_TESTS=ON` + `cmake --build .` compiles clean (only a
+  pre-existing, unrelated enum-mixing warning on the same file), and
+  `test_cimmerian` run live 15x back-to-back against real on-screen scratch
+  windows (`Scratch Window macOS`, `Scratch Component macOS`) — all 15 runs
+  passed with 0 snapshot diffs. Not a guarantee the race can never happen
+  (the repro was intermittent, ~1-2 of 6 tests, in a different codebase's
+  suite), but a real compile + live-run pass, not just code review.
 
 - **X11 capture-timing flakiness (2026-08-14)** — traced from
   `pharos-proto/docs/next_steps.md`'s "Visual-test capture-timing
@@ -89,12 +79,6 @@
 
 ## What's actually left open
 
-- **macOS capture-timing flakiness needs an actual fix** (see "Read first"
-  above): `MacOSScreenCapture::Capture` reads the target window's `frame`
-  once, before the async `SCScreenshotManager` capture completes, with no
-  re-check or retry — root-caused, not yet fixed. A different shape than the
-  X11 stability-poll fix, since this is the *size* going stale, not pixel
-  *content* at a fixed size.
 - **X11 capture-stability-polling fix needs real verification** (see "Read
   first" above): compile + run this repo's own `pharos_visual_tests`-style
   suite (or `test_cimmerian`'s visual tests) against a real X11/compositor
@@ -110,34 +94,25 @@
   where XTEST actually works** (carried over — this dev environment's
   XTEST-over-XWayland is still non-functional, so only the fallback path
   has ever been exercised live).
-- **Win32/macOS window-lookup and `AutoLinuxEventInjector` still aren't
-  compile-tested** (carried over — no Windows/macOS toolchain available
-  here).
+- **Win32 window-lookup still isn't compile-tested** (carried over — no
+  Windows toolchain available here). macOS window-lookup/event-injector are
+  now compile- and live-tested as of this session (see "What changed this
+  session"): this machine has a real Darwin toolchain and Screen Recording
+  permission already granted, which the earlier "no macOS toolchain
+  available" note assumed wasn't the case.
 
 ## What changed this session
 
-Implemented `docs/cimmerian_navigation_without_platform_input_proposal.md`:
+Fixed the macOS capture-timing flakiness documented above:
 
-- Added `include/cimmerian/visual/navigation-driver.hpp` +
-  `src/visual/navigation-driver.cpp` (`NavigateFn`, `ActiveNavigationDriver`)
-  and the `NAVIGATE(screenKey)` macro in `visual-test-macros.hpp`.
-  Throws (doesn't silently no-op) if no `NavigateFn` is registered.
-- Added `VISUAL_DESCRIBE_COMPONENT` macro (a `VISUAL_DESCRIBE` with no
-  group-level window handle) and a `void*`-window-handle-overriding
-  `ASSERT_SNAPSHOT`/`VisualTestRunner::AssertSnapshot` overload, so
-  component-host tests can hand their own mounted window's handle
-  straight to the snapshot assertion instead of relying on a
-  `VISUAL_DESCRIBE`-level one.
-- Wired both into `include/cimmerian/visual.hpp` and
-  `CMakeLists.txt` (`src/visual/navigation-driver.cpp`).
-- Added demo coverage in `test/visual.test.cpp`: `NavigateScratchWindow`
-  (registers a `NavigateFn` against the existing scratch X11 window,
-  recoloring it per `screenKey`) and `ScratchComponentHost`/
-  `MountScratchComponent` (a per-test disposable host window,
-  standing in for a consumer's `MountComponent<T>`). Both new visual
-  tests pass in Update and Verify mode against a real X11 display
-  (`DISPLAY=:0` — no Xvfb available in this environment).
-- Updated `docs/visual-regression-spec.md` (new `NAVIGATE`/
-  `VISUAL_DESCRIBE_COMPONENT`/`ASSERT_SNAPSHOT`-overload sections, Usage
-  Guidance rewritten to point at them) and the proposal doc's own status
-  line to "implemented".
+- `src/visual/platform/macos-screen-capture.mm`: extracted
+  `ResolveStableWindowTarget`, which polls (up to 8x, 16ms apart) re-fetching
+  `SCShareableContent` and re-reading the target window's `frame` until two
+  consecutive reads agree via `CGRectEqualToRect`, before committing to
+  `config.width`/`config.height`. `MacOSScreenCapture::Capture`'s window path
+  now calls this instead of reading `frame` once; the display-capture path is
+  unchanged.
+- Verified with a real build + live run on this Darwin machine: configured a
+  separate `-DCIMMERIAN_BUILD_TESTS=ON` build tree, compiled clean, and ran
+  `test_cimmerian` 15x back-to-back against real on-screen scratch windows —
+  0 failures, 0 snapshot diffs across all runs.

@@ -1,9 +1,12 @@
 #include "cimmerian/visual/platform/macos-screen-capture.hpp"
+#include "cimmerian/test-log.hpp"
 #include <ApplicationServices/ApplicationServices.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 namespace Cimmerian::Visual {
 
@@ -67,6 +70,61 @@ CGImageRef CaptureImageSync(SCContentFilter* filter, SCStreamConfiguration* conf
   return result;
 }
 
+// The target window's frame can still be settling (e.g. right after window
+// creation or a state transition mid-test) when captured. Re-fetching once
+// isn't enough to know whether the read landed mid-settle, so poll until two
+// consecutive frame reads agree - the same "agreement is the real signal"
+// shape as X11ScreenCapture's pixel-stability poll, but comparing the
+// window's *size* here instead of pixel content, since ScreenCaptureKit
+// reads already-composited pixels synchronously (no compositor-flip race)
+// and the thing that can go stale instead is the frame this function uses
+// to size the capture request.
+struct ResolvedWindowTarget {
+  SCContentFilter* filter;
+  CGRect frame;
+};
+
+ResolvedWindowTarget ResolveStableWindowTarget(CGWindowID windowID)
+{
+  constexpr int kMaxAttempts = 8;
+  constexpr auto kPollInterval = std::chrono::milliseconds(16);
+
+  ResolvedWindowTarget current{nil, CGRectZero};
+  bool haveCurrent = false;
+
+  for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+    SCShareableContent* content = FetchShareableContentSync();
+    SCWindow* targetWindow = nil;
+    for (SCWindow* window in content.windows) {
+      if (window.windowID == windowID) {
+        targetWindow = window;
+        break;
+      }
+    }
+    if (!targetWindow) {
+      throw std::runtime_error("MacOSScreenCapture: window not found in shareable content (Screen Recording "
+                                "permission may be missing)");
+    }
+
+    ResolvedWindowTarget next{[[SCContentFilter alloc] initWithDesktopIndependentWindow:targetWindow],
+                               targetWindow.frame};
+
+    if (haveCurrent && CGRectEqualToRect(next.frame, current.frame)) {
+      return next;
+    }
+    current = next;
+    haveCurrent = true;
+
+    if (attempt + 1 < kMaxAttempts) {
+      std::this_thread::sleep_for(kPollInterval);
+    }
+  }
+
+  TEST_LOG_WARN("MacOSScreenCapture: window frame did not stabilize after polling - using the last-read "
+                "frame (capture may be a few pixels off if the window is still resizing/settling)");
+  return current;
+}
+
 } // namespace
 
 Screenshot MacOSScreenCapture::Capture(void* windowHandle)
@@ -75,27 +133,16 @@ Screenshot MacOSScreenCapture::Capture(void* windowHandle)
     const CGWindowID windowID =
         windowHandle ? static_cast<CGWindowID>(reinterpret_cast<uintptr_t>(windowHandle)) : kCGNullWindowID;
 
-    SCShareableContent* content = FetchShareableContentSync();
-
     SCContentFilter* filter = nil;
     CGRect frame = CGRectZero;
 
     if (windowID != kCGNullWindowID) {
-      SCWindow* targetWindow = nil;
-      for (SCWindow* window in content.windows) {
-        if (window.windowID == windowID) {
-          targetWindow = window;
-          break;
-        }
-      }
-      if (!targetWindow) {
-        throw std::runtime_error("MacOSScreenCapture: window not found in shareable content (Screen Recording "
-                                  "permission may be missing)");
-      }
-      filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:targetWindow];
-      frame = targetWindow.frame;
+      ResolvedWindowTarget resolved = ResolveStableWindowTarget(windowID);
+      filter = resolved.filter;
+      frame = resolved.frame;
     }
     else {
+      SCShareableContent* content = FetchShareableContentSync();
       const CGDirectDisplayID mainDisplayID = CGMainDisplayID();
       SCDisplay* mainDisplay = nil;
       for (SCDisplay* display in content.displays) {
