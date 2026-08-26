@@ -1,32 +1,146 @@
 [
 {
-  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
-  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-group.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/src/test-group.cpp",
-  "file": "/Users/deanwilson/development/projects/Cimmerian/src/test-group.cpp",
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-group.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/test-group.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/test-group.cpp",
   "output": "CMakeFiles/cimmerian.dir/src/test-group.cpp.o"
 },
 {
-  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
-  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-registry.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/src/test-registry.cpp",
-  "file": "/Users/deanwilson/development/projects/Cimmerian/src/test-registry.cpp",
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-registry.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/test-registry.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/test-registry.cpp",
   "output": "CMakeFiles/cimmerian.dir/src/test-registry.cpp.o"
 },
 {
-  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
-  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-runner.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/src/test-runner.cpp",
-  "file": "/Users/deanwilson/development/projects/Cimmerian/src/test-runner.cpp",
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/test-runner.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/test-runner.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/test-runner.cpp",
   "output": "CMakeFiles/cimmerian.dir/src/test-runner.cpp.o"
 },
 {
-  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
-  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/test_Cimmerian.dir/test/test-main.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/test/test-main.cpp",
-  "file": "/Users/deanwilson/development/projects/Cimmerian/test/test-main.cpp",
-  "output": "CMakeFiles/test_Cimmerian.dir/test/test-main.cpp.o"
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/snapshot/snapshot-key.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/snapshot/snapshot-key.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/snapshot/snapshot-key.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/snapshot/snapshot-key.cpp.o"
 },
 {
-  "directory": "/Users/deanwilson/development/projects/Cimmerian/build",
-  "command": "/usr/bin/c++  -I/Users/deanwilson/development/projects/Cimmerian/include -std=c++20 -arch arm64 -Wall -Wextra -Wpedantic -o CMakeFiles/test_Cimmerian.dir/test/example.test.cpp.o -c /Users/deanwilson/development/projects/Cimmerian/test/example.test.cpp",
-  "file": "/Users/deanwilson/development/projects/Cimmerian/test/example.test.cpp",
-  "output": "CMakeFiles/test_Cimmerian.dir/test/example.test.cpp.o"
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/snapshot/snapshot-run-mode.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/snapshot/snapshot-run-mode.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/snapshot/snapshot-run-mode.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/snapshot/snapshot-run-mode.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/snapshot/string-snapshot-store.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/snapshot/string-snapshot-store.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/snapshot/string-snapshot-store.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/snapshot/string-snapshot-store.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/snapshot/hash-snapshot-store.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/snapshot/hash-snapshot-store.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/snapshot/hash-snapshot-store.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/snapshot/hash-snapshot-store.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/snapshot/inline-snapshot-rewriter.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/snapshot/inline-snapshot-rewriter.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/snapshot/inline-snapshot-rewriter.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/snapshot/inline-snapshot-rewriter.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/stb-impl.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/stb-impl.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/stb-impl.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/stb-impl.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/active-registries.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/active-registries.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/active-registries.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/active-registries.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/navigation-driver.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/navigation-driver.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/navigation-driver.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/navigation-driver.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/screenshot.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/screenshot.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/screenshot.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/screenshot.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/image-diff.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/image-diff.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/image-diff.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/image-diff.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/snapshot-store.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/snapshot-store.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/snapshot-store.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/snapshot-store.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/visual-test-registry.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/visual-test-registry.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/visual-test-registry.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/visual-test-registry.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/visual-test-runner.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/visual-test-runner.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/visual-test-runner.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/visual-test-runner.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/platform/x11-screen-capture.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/platform/x11-screen-capture.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/platform/x11-screen-capture.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/platform/x11-screen-capture.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/platform/x11-event-injector.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/platform/x11-event-injector.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/platform/x11-event-injector.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/platform/x11-event-injector.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -I/home/deanwilson/development/projects/cimmerian/src/visual -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/cimmerian.dir/src/visual/platform/x11-window-lookup.cpp.o -c /home/deanwilson/development/projects/cimmerian/src/visual/platform/x11-window-lookup.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/src/visual/platform/x11-window-lookup.cpp",
+  "output": "CMakeFiles/cimmerian.dir/src/visual/platform/x11-window-lookup.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/test_cimmerian.dir/test/test-main.cpp.o -c /home/deanwilson/development/projects/cimmerian/test/test-main.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/test/test-main.cpp",
+  "output": "CMakeFiles/test_cimmerian.dir/test/test-main.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/test_cimmerian.dir/test/example.test.cpp.o -c /home/deanwilson/development/projects/cimmerian/test/example.test.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/test/example.test.cpp",
+  "output": "CMakeFiles/test_cimmerian.dir/test/example.test.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/test_cimmerian.dir/test/snapshot.test.cpp.o -c /home/deanwilson/development/projects/cimmerian/test/snapshot.test.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/test/snapshot.test.cpp",
+  "output": "CMakeFiles/test_cimmerian.dir/test/snapshot.test.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/test_cimmerian.dir/test/visual.test.cpp.o -c /home/deanwilson/development/projects/cimmerian/test/visual.test.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/test/visual.test.cpp",
+  "output": "CMakeFiles/test_cimmerian.dir/test/visual.test.cpp.o"
+},
+{
+  "directory": "/home/deanwilson/development/projects/cimmerian/build",
+  "command": "/usr/bin/c++ -DCIMMERIAN_VISUAL_PLATFORM_X11 -I/home/deanwilson/development/projects/cimmerian/include -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/test_cimmerian.dir/test/support/scratch-window-x11.cpp.o -c /home/deanwilson/development/projects/cimmerian/test/support/scratch-window-x11.cpp",
+  "file": "/home/deanwilson/development/projects/cimmerian/test/support/scratch-window-x11.cpp",
+  "output": "CMakeFiles/test_cimmerian.dir/test/support/scratch-window-x11.cpp.o"
 }
 ]

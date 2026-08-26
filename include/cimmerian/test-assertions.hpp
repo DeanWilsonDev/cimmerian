@@ -77,73 +77,82 @@ inline void OutputStringDiff(const std::string& expectedString, const std::strin
 template <Iterable ContainerA, Iterable ContainerB>
 void OutputContainerDiff(const ContainerA& expectedContainer, const ContainerB& receivedContainer)
 {
-    const auto expectedSize = std::distance(std::begin(expectedContainer), std::end(expectedContainer));
-    const auto receivedSize = std::distance(std::begin(receivedContainer), std::end(receivedContainer));
-    const auto commonSize   = std::min(expectedSize, receivedSize);
+  const auto expectedSize =
+      std::distance(std::begin(expectedContainer), std::end(expectedContainer));
+  const auto receivedSize =
+      std::distance(std::begin(receivedContainer), std::end(receivedContainer));
+  const auto commonSize = std::min(expectedSize, receivedSize);
 
-    auto expectedIterator = std::begin(expectedContainer);
-    auto receivedIterator = std::begin(receivedContainer);
+  auto expectedIterator = std::begin(expectedContainer);
+  auto receivedIterator = std::begin(receivedContainer);
 
-    std::string expectedFormatted = "[";
-    std::string receivedFormatted = "[";
+  std::string expectedFormatted = "[";
+  std::string receivedFormatted = "[";
 
-    bool expectedNeedsLeadingComma = false;
-    bool receivedNeedsLeadingComma = false;
+  bool expectedNeedsLeadingComma = false;
+  bool receivedNeedsLeadingComma = false;
 
-    for (std::ptrdiff_t elementIndex = 0; elementIndex < commonSize; ++elementIndex) {
-        const auto& expectedElement = *expectedIterator;
-        const auto& receivedElement = *receivedIterator;
+  for (std::ptrdiff_t elementIndex = 0; elementIndex < commonSize; ++elementIndex) {
+    const auto& expectedElement = *expectedIterator;
+    const auto& receivedElement = *receivedIterator;
 
-        if (expectedNeedsLeadingComma) expectedFormatted += ", ";
-        if (receivedNeedsLeadingComma) receivedFormatted += ", ";
+    if (expectedNeedsLeadingComma)
+      expectedFormatted += ", ";
+    if (receivedNeedsLeadingComma)
+      receivedFormatted += ", ";
 
-        if (expectedElement == receivedElement) {
-            expectedFormatted += FormatValue(expectedElement);
-            receivedFormatted += FormatValue(receivedElement);
-        } else {
-            expectedFormatted += Ansi::AnsiFormatter::DiffExpected(FormatValue(expectedElement));
-            receivedFormatted += Ansi::AnsiFormatter::DiffReceived(FormatValue(receivedElement));
-        }
-
-        expectedNeedsLeadingComma = true;
-        receivedNeedsLeadingComma = true;
-
-        ++expectedIterator;
-        ++receivedIterator;
+    if (expectedElement == receivedElement) {
+      expectedFormatted += FormatValue(expectedElement);
+      receivedFormatted += FormatValue(receivedElement);
+    }
+    else {
+      expectedFormatted += Ansi::AnsiFormatter::DiffExpected(FormatValue(expectedElement));
+      receivedFormatted += Ansi::AnsiFormatter::DiffReceived(FormatValue(receivedElement));
     }
 
-    // Elements expected has that received is missing
-    for (std::ptrdiff_t missingIndex = commonSize; missingIndex < expectedSize; ++missingIndex) {
-        if (expectedNeedsLeadingComma) expectedFormatted += ", ";
-        if (receivedNeedsLeadingComma) receivedFormatted += ", ";
+    expectedNeedsLeadingComma = true;
+    receivedNeedsLeadingComma = true;
 
-        expectedFormatted += Ansi::AnsiFormatter::DiffExpected(FormatValue(*expectedIterator));
-        receivedFormatted += Ansi::AnsiFormatter::DiffMissing(1);
+    ++expectedIterator;
+    ++receivedIterator;
+  }
 
-        expectedNeedsLeadingComma = true;
-        receivedNeedsLeadingComma = true;
+  // Elements expected has that received is missing
+  for (std::ptrdiff_t missingIndex = commonSize; missingIndex < expectedSize; ++missingIndex) {
+    if (expectedNeedsLeadingComma)
+      expectedFormatted += ", ";
+    if (receivedNeedsLeadingComma)
+      receivedFormatted += ", ";
 
-        ++expectedIterator;
-    }
+    expectedFormatted += Ansi::AnsiFormatter::DiffExpected(FormatValue(*expectedIterator));
+    receivedFormatted += Ansi::AnsiFormatter::DiffMissing(1);
 
-    // Elements received has that expected does not
-    for (std::ptrdiff_t extraIndex = commonSize; extraIndex < receivedSize; ++extraIndex) {
-        if (expectedNeedsLeadingComma) expectedFormatted += ", ";
-        if (receivedNeedsLeadingComma) receivedFormatted += ", ";
+    expectedNeedsLeadingComma = true;
+    receivedNeedsLeadingComma = true;
 
-        // expected side gets nothing — no placeholder, no comma advance beyond the bracket
-        receivedFormatted += Ansi::AnsiFormatter::DiffExtra(FormatValue(*receivedIterator));
+    ++expectedIterator;
+  }
 
-        expectedNeedsLeadingComma = true;
-        receivedNeedsLeadingComma = true;
+  // Elements received has that expected does not
+  for (std::ptrdiff_t extraIndex = commonSize; extraIndex < receivedSize; ++extraIndex) {
+    if (expectedNeedsLeadingComma)
+      expectedFormatted += ", ";
+    if (receivedNeedsLeadingComma)
+      receivedFormatted += ", ";
 
-        ++receivedIterator;
-    }
+    // expected side gets nothing — no placeholder, no comma advance beyond the bracket
+    receivedFormatted += Ansi::AnsiFormatter::DiffExtra(FormatValue(*receivedIterator));
 
-    expectedFormatted += "]";
-    receivedFormatted += "]";
+    expectedNeedsLeadingComma = true;
+    receivedNeedsLeadingComma = true;
 
-    OutputDiffToStderr(expectedFormatted, receivedFormatted);
+    ++receivedIterator;
+  }
+
+  expectedFormatted += "]";
+  receivedFormatted += "]";
+
+  OutputDiffToStderr(expectedFormatted, receivedFormatted);
 }
 
 inline void fail(const char* file, int line, const char* msg)
@@ -186,6 +195,18 @@ inline void assert_equal_impl(
 )
 {
   assert_equal_impl(std::string(expectedString), std::string(receivedString), file, line);
+}
+
+template <typename TValue>
+inline void assert_near(TValue actual, TValue expected, TValue epsilon, const char* file, int line)
+{
+  if (std::abs(actual - expected) > epsilon) {
+    fail(file, line, "Values not within epsilon:");
+    OutputDiffToStderr(
+        Ansi::AnsiFormatter::DiffExpected(FormatValue(expected) + " ± " + FormatValue(epsilon)),
+        Ansi::AnsiFormatter::DiffReceived(FormatValue(actual))
+    );
+  }
 }
 
 template <class T, std::size_t expectedArraySize, class U, std::size_t receivedArraySize>

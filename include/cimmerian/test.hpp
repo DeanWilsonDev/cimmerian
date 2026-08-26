@@ -22,17 +22,18 @@ inline TestGroup* _test_group = nullptr;
 /* ################################# */
 
 #define DESCRIBE(group_name, BODY)                                                                 \
-  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_desc_reg_, __COUNTER__) = []() {  \
-    Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();                                         \
-    TestGroup* _parent = (_test_group != nullptr) ? _test_group : _registry.GetRootGroup();        \
-    TestGroup* _child = _registry.GetChildGroup(_parent, (group_name));                            \
-    TestGroup* _saved = _test_group;                                                               \
-    _test_group = _child;                                                                          \
-    do                                                                                             \
-      BODY while (0);                                                                              \
-    _test_group = _saved;                                                                          \
-    return true;                                                                                   \
-  }();
+  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_desc_reg_, __COUNTER__) =     \
+      []() {                                                                                       \
+        Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();               \
+        TestGroup* _parent = (_test_group != nullptr) ? _test_group : _registry.GetRootGroup();    \
+        TestGroup* _child = _registry.GetChildGroup(_parent, (group_name));                        \
+        TestGroup* _saved = _test_group;                                                           \
+        _test_group = _child;                                                                      \
+        do                                                                                         \
+          BODY while (0);                                                                          \
+        _test_group = _saved;                                                                      \
+        return true;                                                                               \
+      }();
 
 /* ################################# */
 /* ========= HOOKS: ================ */
@@ -40,24 +41,30 @@ inline TestGroup* _test_group = nullptr;
 
 #define BEFORE_EACH(BODY)                                                                          \
   do {                                                                                             \
-    Cimmerian::TestRegistry::GetInstance().SetBeforeEach(                                                     \
+    Cimmerian::TestRegistry::GetInstance().SetBeforeEach(                                          \
         _test_group, +[](void* user) BODY, nullptr, nullptr                                        \
     );                                                                                             \
   } while (0)
 
 #define AFTER_EACH(BODY)                                                                           \
   do {                                                                                             \
-    Cimmerian::TestRegistry::GetInstance().SetAfterEach(_test_group, +[](void* user) BODY, nullptr, nullptr); \
+    Cimmerian::TestRegistry::GetInstance().SetAfterEach(                                           \
+        _test_group, +[](void* user) BODY, nullptr, nullptr                                        \
+    );                                                                                             \
   } while (0)
 
 #define BEFORE_ALL(BODY)                                                                           \
   do {                                                                                             \
-    Cimmerian::TestRegistry::GetInstance().SetBeforeAll(_test_group, +[](void* user) BODY, nullptr, nullptr); \
+    Cimmerian::TestRegistry::GetInstance().SetBeforeAll(                                           \
+        _test_group, +[](void* user) BODY, nullptr, nullptr                                        \
+    );                                                                                             \
   } while (0)
 
 #define AFTER_ALL(BODY)                                                                            \
   do {                                                                                             \
-    Cimmerian::TestRegistry::GetInstance().SetAfterAll(_test_group, +[](void* user) BODY, nullptr, nullptr);  \
+    Cimmerian::TestRegistry::GetInstance().SetAfterAll(                                            \
+        _test_group, +[](void* user) BODY, nullptr, nullptr                                        \
+    );                                                                                             \
   } while (0)
 
 /* ################################# */
@@ -65,25 +72,26 @@ inline TestGroup* _test_group = nullptr;
 /* ################################# */
 
 #define TEST(testName, ...)                                                                        \
-  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_test_body_reg_, __COUNTER__) =    \
-      [=]() {                                                                                      \
-        Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();                                     \
-        TestGroup* _group = _test_group ? _test_group : _registry.GetRootGroup();                  \
-        _registry.RegisterTest(                                                                    \
-            _group, (testName),                                                                    \
-            +[](void* user) {                                                                      \
-              (void)user;                                                                          \
-              __VA_ARGS__                                                                          \
-            },                                                                                     \
-            nullptr, nullptr                                                                       \
-        );                                                                                         \
-        return true;                                                                               \
-      }();
+  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(                                              \
+      _test_framework_test_body_reg_, __COUNTER__                                                  \
+  ) = [=]() {                                                                                      \
+    Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();                   \
+    TestGroup* _group = _test_group ? _test_group : _registry.GetRootGroup();                      \
+    _registry.RegisterTest(                                                                        \
+        _group, (testName),                                                                        \
+        +[](void* user) {                                                                          \
+          (void)user;                                                                              \
+          __VA_ARGS__                                                                              \
+        },                                                                                         \
+        nullptr, nullptr                                                                           \
+    );                                                                                             \
+    return true;                                                                                   \
+  }();
 
 #define TEST_FN(testName, FN)                                                                      \
-  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_test_fn_reg_, __COUNTER__) =      \
+  CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_test_fn_reg_, __COUNTER__) =  \
       [=]() {                                                                                      \
-        Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();                                     \
+        Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();               \
         TestGroup* _group = _test_group ? _test_group : _registry.GetRootGroup();                  \
         _registry.RegisterTest(_group, (testName), (FN), nullptr, nullptr);                        \
         return true;                                                                               \
@@ -99,7 +107,7 @@ inline TestGroup* _test_group = nullptr;
 #define ASSERT_TRUE(cond)                                                                          \
   do {                                                                                             \
     if (!(cond))                                                                                   \
-      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                          \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
           __FILE__, __LINE__, "ASSERT_TRUE failed: " #cond                                         \
       );                                                                                           \
   } while (0)
@@ -107,26 +115,47 @@ inline TestGroup* _test_group = nullptr;
 #define ASSERT_FALSE(cond)                                                                         \
   do {                                                                                             \
     if ((cond))                                                                                    \
-      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                          \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
           __FILE__, __LINE__, "ASSERT_FALSE failed: " #cond                                        \
       );                                                                                           \
   } while (0)
 
 #define ASSERT_EQUAL(a, b)                                                                         \
   do {                                                                                             \
-    ::Cimmerian::Assertions::assert_equal((a), (b), __FILE__, __LINE__);                         \
+    ::Cimmerian::Assertions::assert_equal((a), (b), __FILE__, __LINE__);                           \
+  } while (0)
+
+#define ASSERT_NEAR(a, b, epsilon)                                                                 \
+  do {                                                                                             \
+    ::Cimmerian::Assertions::assert_near((a), (b), (epsilon), __FILE__, __LINE__);                 \
   } while (0)
 
 #define ASSERT_NOT_EQUAL(a, b)                                                                     \
   do {                                                                                             \
-    ::Cimmerian::Assertions::assert_not_equal((a), (b), __FILE__, __LINE__);                     \
+    ::Cimmerian::Assertions::assert_not_equal((a), (b), __FILE__, __LINE__);                       \
+  } while (0)
+
+#define ASSERT_NULL(ptr)                                                                           \
+  do {                                                                                             \
+    if ((ptr) != nullptr)                                                                          \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__, "ASSERT_NULL failed: " #ptr " is not null"                           \
+      );                                                                                           \
+  } while (0)
+
+#define ASSERT_NOT_NULL(ptr)                                                                       \
+  do {                                                                                             \
+    if ((ptr) == nullptr)                                                                          \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__, "ASSERT_NOT_NULL failed: " #ptr " is null"                           \
+      );                                                                                           \
   } while (0)
 
 // REQUIRE variants halt the current test on failure via return
 #define REQUIRE_TRUE(cond)                                                                         \
   do {                                                                                             \
     if (!(cond)) {                                                                                 \
-      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                          \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
           __FILE__, __LINE__, "REQUIRE_TRUE failed: " #cond                                        \
       );                                                                                           \
       return;                                                                                      \
@@ -136,7 +165,46 @@ inline TestGroup* _test_group = nullptr;
 #define REQUIRE_EQUAL(a, b)                                                                        \
   do {                                                                                             \
     if (!((a) == (b))) {                                                                           \
-      ::Cimmerian::Assertions::assert_equal((a), (b), __FILE__, __LINE__);                       \
+      ::Cimmerian::Assertions::assert_equal((a), (b), __FILE__, __LINE__);                         \
       return;                                                                                      \
+    }                                                                                              \
+  } while (0)
+
+#define ASSERT_THROWS(expression, exception_type)                                                  \
+  do {                                                                                             \
+    bool _did_throw = false;                                                                       \
+    try {                                                                                          \
+      (expression);                                                                                \
+    }                                                                                              \
+    catch (const exception_type&) {                                                                \
+      _did_throw = true;                                                                           \
+    }                                                                                              \
+    catch (...) {                                                                                  \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__,                                                                      \
+          "ASSERT_THROWS failed: " #expression " threw an unexpected exception type"               \
+      );                                                                                           \
+    }                                                                                              \
+    if (!_did_throw)                                                                               \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__, "ASSERT_THROWS failed: " #expression " did not throw"                \
+      );                                                                                           \
+  } while (0)
+
+#define ASSERT_NO_THROW(expression)                                                                \
+  do {                                                                                             \
+    try {                                                                                          \
+      (expression);                                                                                \
+    }                                                                                              \
+    catch (const std::exception& _e) {                                                             \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__,                                                                      \
+          "ASSERT_NO_THROW failed: " #expression " threw: " + std::string(_e.what())               \
+      );                                                                                           \
+    }                                                                                              \
+    catch (...) {                                                                                  \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__, "ASSERT_NO_THROW failed: " #expression " threw unknown exception"    \
+      );                                                                                           \
     }                                                                                              \
   } while (0)
