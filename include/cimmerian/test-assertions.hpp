@@ -3,6 +3,7 @@
 #include "ansi-formatter.hpp"
 #include <algorithm>
 #include <iostream>
+#include <string>
 #include <sstream>
 #include <cstddef>
 #include <cstring>
@@ -270,6 +271,30 @@ void assert_not_equal(const A& expected, const B& received, const char* file, in
     fail(file, line, "Expected values to differ but they were equal:");
     OutputDiffToStderr(FormatValue(expected), FormatValue(received));
   }
+}
+
+template <typename TExceptionType, typename TCallable>
+inline void assert_throws(TCallable&& callable, const char* expression, const char* file, int line)
+{
+  bool did_throw = false;
+  try {
+    callable();
+  }
+  catch (const TExceptionType&) {
+    did_throw = true;
+  }
+  catch (...) {
+    TestFailHandlerRegistry::GetInstance().NotifyTestFail(
+        file, line,
+        (std::string("ASSERT_THROWS failed: ") + expression + " threw an unexpected exception type")
+            .c_str()
+    );
+    return;
+  }
+  if (!did_throw)
+    TestFailHandlerRegistry::GetInstance().NotifyTestFail(
+        file, line, (std::string("ASSERT_THROWS failed: ") + expression + " did not throw").c_str()
+    );
 }
 
 } // namespace Cimmerian::Assertions

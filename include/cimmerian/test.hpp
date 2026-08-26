@@ -172,23 +172,9 @@ inline TestGroup* _test_group = nullptr;
 
 #define ASSERT_THROWS(expression, exception_type)                                                  \
   do {                                                                                             \
-    bool _did_throw = false;                                                                       \
-    try {                                                                                          \
-      (expression);                                                                                \
-    }                                                                                              \
-    catch (const exception_type&) {                                                                \
-      _did_throw = true;                                                                           \
-    }                                                                                              \
-    catch (...) {                                                                                  \
-      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
-          __FILE__, __LINE__,                                                                      \
-          "ASSERT_THROWS failed: " #expression " threw an unexpected exception type"               \
-      );                                                                                           \
-    }                                                                                              \
-    if (!_did_throw)                                                                               \
-      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
-          __FILE__, __LINE__, "ASSERT_THROWS failed: " #expression " did not throw"                \
-      );                                                                                           \
+    ::Cimmerian::Assertions::assert_throws<exception_type>(                                        \
+        [&]() { (expression); }, #expression, __FILE__, __LINE__                                   \
+    );                                                                                             \
   } while (0)
 
 #define ASSERT_NO_THROW(expression)                                                                \
