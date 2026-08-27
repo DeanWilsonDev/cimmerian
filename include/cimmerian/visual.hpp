@@ -1,5 +1,10 @@
 #pragma once
 
+#ifndef CIMMERIAN_ENABLE_VISUAL_TESTING
+#error                                                                                                              \
+    "cimmerian/visual.hpp requires visual regression testing support to be compiled in: configure cimmerian with -DCIMMERIAN_ENABLE_VISUAL_TESTING=ON"
+#endif
+
 #include "visual/i-event-injector.hpp"
 #include "visual/i-screen-capture.hpp"
 #include "visual/image-diff.hpp"

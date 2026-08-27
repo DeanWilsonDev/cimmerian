@@ -1,10 +1,12 @@
 #include "cimmerian/test-runner.hpp"
 #include "cimmerian/ansi-codes.hpp"
 #include "cimmerian/ansi-text-builder.hpp"
+#ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
 #include "cimmerian/snapshot/hash-snapshot-store.hpp"
 #include "cimmerian/snapshot/inline-snapshot-rewriter.hpp"
 #include "cimmerian/snapshot/snapshot-run-mode.hpp"
 #include "cimmerian/snapshot/string-snapshot-store.hpp"
+#endif
 #include "cimmerian/test-fail-handler-registry.hpp"
 #include "cimmerian/test-group.hpp"
 #include "cimmerian/test-log.hpp"
@@ -168,6 +170,7 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   auto suiteEndTime = std::chrono::high_resolution_clock::now();
   summary.totalElapsedTime = suiteEndTime - suiteStartTime;
 
+#ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
   Snapshot::InlineSnapshotRewriter::GetInstance().FlushAll();
   Snapshot::StringSnapshotStore::GetInstance().Flush();
   Snapshot::HashSnapshotStore::GetInstance().Flush();
@@ -178,6 +181,7 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   summary.snapshotsUpdated = snapshotSummary.snapshotsUpdated;
   summary.snapshotsMissing = snapshotSummary.snapshotsMissing;
   summary.inlineRewriteCount = snapshotSummary.inlineRewriteCount;
+#endif
 
   // Print summary
   std::printf("\n");

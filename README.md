@@ -62,6 +62,21 @@ cmake --build build
 cmake --install build
 ```
 
+### Optional features
+
+Snapshot testing (`cimmerian/snapshot.hpp`) and visual regression testing
+(`cimmerian/visual.hpp`) are off by default — they aren't compiled into the
+library unless you ask for them, so most consumers pay no extra compile time
+for either. Enable whichever you need at configure time, independently:
+
+```
+cmake -B build -DCIMMERIAN_ENABLE_SNAPSHOT_TESTING=ON -DCIMMERIAN_ENABLE_VISUAL_TESTING=ON
+```
+
+Including `cimmerian/snapshot.hpp` or `cimmerian/visual.hpp` without enabling
+the matching option fails fast at compile time with a `#error` pointing at
+the flag to set, rather than an obscure link error.
+
 ---
 
 ## Quick Start

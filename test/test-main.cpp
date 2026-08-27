@@ -1,17 +1,26 @@
+#ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
 #include <cimmerian/snapshot/snapshot-run-mode.hpp>
+#endif
 #include <cimmerian/test-debug.hpp>
 #include <cimmerian/test-runner.hpp>
+#ifdef CIMMERIAN_ENABLE_VISUAL_TESTING
 #include <cimmerian/visual.hpp>
 #include <memory>
+#endif
 
 int main(int argc, char* argv[])
 {
   Cimmerian::CheckDebug(argc, argv);
+#ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
   Cimmerian::Snapshot::SnapshotRunModeRegistry::GetInstance().ParseArgs(argc, argv);
+#endif
 
   Cimmerian::TestRunner runner;
   Cimmerian::TestRunSummary summary = runner.RunAll(&Cimmerian::TestRegistry::GetInstance());
 
+  int failed = summary.failed;
+
+#ifdef CIMMERIAN_ENABLE_VISUAL_TESTING
   Cimmerian::Visual::VisualTestRunner visualRunner;
   visualRunner.ParseArgs(argc, argv);
 #if defined(CIMMERIAN_VISUAL_PLATFORM_X11) || defined(CIMMERIAN_VISUAL_PLATFORM_LINUX_UINPUT) ||                   \
@@ -35,6 +44,8 @@ int main(int argc, char* argv[])
 #endif
   Cimmerian::Visual::VisualTestRunSummary visualSummary =
       visualRunner.RunAll(&Cimmerian::Visual::VisualTestRegistry::GetInstance());
+  failed += visualSummary.failed;
+#endif
 
-  return (summary.failed + visualSummary.failed == 0) ? 0 : 1;
+  return (failed == 0) ? 0 : 1;
 }
