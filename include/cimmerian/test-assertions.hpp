@@ -2,30 +2,40 @@
 #include "test-fail-handler-registry.hpp"
 #include "ansi-formatter.hpp"
 #include <algorithm>
+#include <concepts>
 #include <iostream>
 #include <string>
-#include <sstream>
 #include <cstddef>
 #include <cstring>
+#include <cmath>
 #include <format>
 #include <span>
 
 namespace Cimmerian::Assertions {
 
 template <typename T>
-concept Formattable = requires(T t) {
-  { std::format("{}", t) } -> std::convertible_to<std::string>;
-};
+concept StringLike = std::convertible_to<const T&, std::string_view>;
 
 template <typename T>
-concept Iterable = requires(T t) {
+concept Formattable = std::semiregular<std::formatter<std::decay_t<T>, char>>;
+
+template <typename T>
+concept Iterable = requires(T& t) {
   { std::begin(t) } -> std::input_iterator;
   { std::end(t) } -> std::input_iterator;
 };
 
-template <Formattable T> std::string FormatValue(const T& value)
+template <typename T> std::string FormatValue(const T& value)
 {
-  return std::format("{}", value);
+  if constexpr (Formattable<T>) {
+    return std::format("{}", value);
+  }
+  else if constexpr (std::is_enum_v<T>) {
+    return std::format("{}({})", typeid(T).name(), static_cast<std::underlying_type_t<T>>(value));
+  }
+  else {
+    return std::format("<{}: no std::formatter>", typeid(T).name());
+  }
 }
 
 inline void OutputDiffToStderr(const std::string& expectedLine, const std::string& receivedLine)
@@ -68,7 +78,6 @@ inline void OutputStringDiff(const std::string& expectedString, const std::strin
 
   if (receivedLength > expectedLength) {
     std::string extraChars = receivedString.substr(expectedLength);
-    expectedFormatted += "";
     receivedFormatted += Ansi::AnsiFormatter::DiffExtra(extraChars);
   }
 
@@ -136,15 +145,12 @@ void OutputContainerDiff(const ContainerA& expectedContainer, const ContainerB& 
 
   // Elements received has that expected does not
   for (std::ptrdiff_t extraIndex = commonSize; extraIndex < receivedSize; ++extraIndex) {
-    if (expectedNeedsLeadingComma)
-      expectedFormatted += ", ";
     if (receivedNeedsLeadingComma)
       receivedFormatted += ", ";
 
     // expected side gets nothing — no placeholder, no comma advance beyond the bracket
     receivedFormatted += Ansi::AnsiFormatter::DiffExtra(FormatValue(*receivedIterator));
 
-    expectedNeedsLeadingComma = true;
     receivedNeedsLeadingComma = true;
 
     ++receivedIterator;
@@ -162,8 +168,21 @@ inline void fail(const char* file, int line, const char* msg)
   TestFailHandlerRegistry::GetInstance().NotifyTestFail(file, line, msg);
 }
 
-template <Formattable A, Formattable B>
-  requires(!Iterable<A> && !Iterable<B>)
+template <typename TValue, typename TEpsilon>
+inline void
+assert_near(TValue actual, TValue expected, TEpsilon epsilon, const char* file, int line)
+{
+  if (std::abs(actual - expected) > epsilon) {
+    fail(file, line, "Values not within epsilon:");
+    OutputDiffToStderr(
+        Ansi::AnsiFormatter::DiffExpected(FormatValue(expected) + " ± " + FormatValue(epsilon)),
+        Ansi::AnsiFormatter::DiffReceived(FormatValue(actual))
+    );
+  }
+}
+
+template <typename A, typename B>
+  requires(!Iterable<A> && !Iterable<B> && !(StringLike<A> && StringLike<B>))
 void assert_equal_impl(const A& expectedValue, const B& receivedValue, const char* file, int line)
 {
   if (!(expectedValue == receivedValue)) {
@@ -175,42 +194,25 @@ void assert_equal_impl(const A& expectedValue, const B& receivedValue, const cha
   }
 }
 
-inline void assert_equal_impl(
-    const std::string& expectedString,
-    const std::string& receivedString,
+template <StringLike ExpectedString, StringLike ReceivedString>
+void assert_equal_impl(
+    const ExpectedString& expectedString,
+    const ReceivedString& receivedString,
     const char* file,
     int line
 )
 {
-  if (expectedString != receivedString) {
+  const std::string_view expectedText{expectedString};
+  const std::string_view receivedText{receivedString};
+
+  if (expectedText != receivedText) {
     fail(file, line, "Strings differ:");
-    OutputStringDiff(expectedString, receivedString);
-  }
-}
-
-inline void assert_equal_impl(
-    const char* expectedString,
-    const char* receivedString,
-    const char* file,
-    int line
-)
-{
-  assert_equal_impl(std::string(expectedString), std::string(receivedString), file, line);
-}
-
-template <typename TValue>
-inline void assert_near(TValue actual, TValue expected, TValue epsilon, const char* file, int line)
-{
-  if (std::abs(actual - expected) > epsilon) {
-    fail(file, line, "Values not within epsilon:");
-    OutputDiffToStderr(
-        Ansi::AnsiFormatter::DiffExpected(FormatValue(expected) + " ± " + FormatValue(epsilon)),
-        Ansi::AnsiFormatter::DiffReceived(FormatValue(actual))
-    );
+    OutputStringDiff(std::string(expectedText), std::string(receivedString));
   }
 }
 
 template <class T, std::size_t expectedArraySize, class U, std::size_t receivedArraySize>
+  requires(!std::same_as<std::remove_cv_t<T>, char>)
 void assert_equal_impl(
     const T (&expectedArray)[expectedArraySize],
     const U (&receivedArray)[receivedArraySize],
@@ -226,14 +228,18 @@ void assert_equal_impl(
   bool arraysAreEqual =
       (expectedArraySize == receivedArraySize) &&
       std::equal(std::begin(expectedArray), std::end(expectedArray), std::begin(receivedArray));
+
   if (!arraysAreEqual) {
-    fail(file, line, "Arrays differ:");
+    fail(
+        file, line,
+        expectedArraySize != receivedArraySize ? "Array sizes differ:" : "Arrays differ:"
+    );
     OutputContainerDiff(expectedSpan, receivedSpan);
   }
 }
 
 template <Iterable ContainerA, Iterable ContainerB>
-  requires(!std::is_same_v<ContainerA, std::string> && !std::is_same_v<ContainerB, std::string>)
+  requires(!(StringLike<ContainerA> && StringLike<ContainerB>))
 void assert_equal_impl(
     const ContainerA& expectedContainer,
     const ContainerB& receivedContainer,
