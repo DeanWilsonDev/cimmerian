@@ -4,14 +4,22 @@
 #include <algorithm>
 #include <concepts>
 #include <iostream>
+#include <iterator>
 #include <string>
+#include <string_view>
 #include <cstddef>
-#include <cstring>
-#include <cmath>
 #include <format>
 #include <span>
+#include <type_traits>
+#include <typeinfo>
 
 namespace Cimmerian::Assertions {
+
+// Every public assertion takes (actual, expected).
+//   ASSERT_EQUAL(lexer.TextOf(token), "signal");
+//                ^ actual             ^ expected
+// The output helpers take (expected, actual), matching the order the two lines
+// are printed in.
 
 template <typename T>
 concept StringLike = std::convertible_to<const T&, std::string_view>;
@@ -21,8 +29,8 @@ concept Formattable = std::semiregular<std::formatter<std::decay_t<T>, char>>;
 
 template <typename T>
 concept Iterable = requires(T& t) {
-  { std::begin(t) } -> std::input_iterator;
-  { std::end(t) } -> std::input_iterator;
+  { std::begin(t) } -> std::forward_iterator;
+  { std::end(t) } -> std::forward_iterator;
 };
 
 template <typename T> std::string FormatValue(const T& value)
@@ -38,128 +46,130 @@ template <typename T> std::string FormatValue(const T& value)
   }
 }
 
-inline void OutputDiffToStderr(const std::string& expectedLine, const std::string& receivedLine)
+inline void OutputDiffToStderr(const std::string& expectedLine, const std::string& actualLine)
 {
   std::cerr << "  " << Ansi::AnsiFormatter::ExpectedPrefix() << " " << expectedLine << "\n";
-  std::cerr << "  " << Ansi::AnsiFormatter::ReceivedPrefix() << " " << receivedLine << "\n";
+  std::cerr << "  " << Ansi::AnsiFormatter::ReceivedPrefix() << " " << actualLine << "\n";
 }
 
-inline void OutputStringDiff(const std::string& expectedString, const std::string& receivedString)
+inline void OutputStringDiff(const std::string& expectedString, const std::string& actualString)
 {
   std::string expectedFormatted;
-  std::string receivedFormatted;
+  std::string actualFormatted;
 
   const std::size_t expectedLength = expectedString.size();
-  const std::size_t receivedLength = receivedString.size();
-  const std::size_t commonLength = std::min(expectedLength, receivedLength);
+  const std::size_t actualLength = actualString.size();
+  const std::size_t commonLength = std::min(expectedLength, actualLength);
 
   for (std::size_t charIndex = 0; charIndex < commonLength; ++charIndex) {
     const char expectedChar = expectedString[charIndex];
-    const char receivedChar = receivedString[charIndex];
+    const char actualChar = actualString[charIndex];
 
-    if (expectedChar == receivedChar) {
+    if (expectedChar == actualChar) {
       expectedFormatted += expectedChar;
-      receivedFormatted += receivedChar;
+      actualFormatted += actualChar;
     }
     else {
       expectedFormatted += Ansi::AnsiFormatter::DiffExpected(std::string(1, expectedChar));
-      receivedFormatted += Ansi::AnsiFormatter::DiffReceived(std::string(1, receivedChar));
+      actualFormatted += Ansi::AnsiFormatter::DiffReceived(std::string(1, actualChar));
     }
   }
 
-  if (expectedLength > receivedLength) {
-    const std::size_t missingCount = expectedLength - receivedLength;
-    for (std::size_t i = 0; i < missingCount; ++i) {
-      expectedFormatted +=
-          Ansi::AnsiFormatter::DiffExpected(std::string(1, expectedString[receivedLength + i]));
+  if (expectedLength > actualLength) {
+    const std::size_t missingCount = expectedLength - actualLength;
+    for (std::size_t missingIndex = 0; missingIndex < missingCount; ++missingIndex) {
+      expectedFormatted += Ansi::AnsiFormatter::DiffExpected(
+          std::string(1, expectedString[actualLength + missingIndex])
+      );
     }
-    receivedFormatted += Ansi::AnsiFormatter::DiffMissing(missingCount);
+    actualFormatted += Ansi::AnsiFormatter::DiffMissing(missingCount);
   }
 
-  if (receivedLength > expectedLength) {
-    std::string extraChars = receivedString.substr(expectedLength);
-    receivedFormatted += Ansi::AnsiFormatter::DiffExtra(extraChars);
+  if (actualLength > expectedLength) {
+    const std::string extraChars = actualString.substr(expectedLength);
+    actualFormatted += Ansi::AnsiFormatter::DiffExtra(extraChars);
   }
 
-  OutputDiffToStderr("\"" + expectedFormatted + "\"", "\"" + receivedFormatted + "\"");
+  OutputDiffToStderr("\"" + expectedFormatted + "\"", "\"" + actualFormatted + "\"");
 }
 
-template <Iterable ContainerA, Iterable ContainerB>
-void OutputContainerDiff(const ContainerA& expectedContainer, const ContainerB& receivedContainer)
+template <Iterable ExpectedContainer, Iterable ActualContainer>
+void OutputContainerDiff(
+    const ExpectedContainer& expectedContainer,
+    const ActualContainer& actualContainer
+)
 {
   const auto expectedSize =
       std::distance(std::begin(expectedContainer), std::end(expectedContainer));
-  const auto receivedSize =
-      std::distance(std::begin(receivedContainer), std::end(receivedContainer));
-  const auto commonSize = std::min(expectedSize, receivedSize);
+  const auto actualSize = std::distance(std::begin(actualContainer), std::end(actualContainer));
+  const auto commonSize = std::min(expectedSize, actualSize);
 
   auto expectedIterator = std::begin(expectedContainer);
-  auto receivedIterator = std::begin(receivedContainer);
+  auto actualIterator = std::begin(actualContainer);
 
   std::string expectedFormatted = "[";
-  std::string receivedFormatted = "[";
+  std::string actualFormatted = "[";
 
   bool expectedNeedsLeadingComma = false;
-  bool receivedNeedsLeadingComma = false;
+  bool actualNeedsLeadingComma = false;
 
   for (std::ptrdiff_t elementIndex = 0; elementIndex < commonSize; ++elementIndex) {
     const auto& expectedElement = *expectedIterator;
-    const auto& receivedElement = *receivedIterator;
+    const auto& actualElement = *actualIterator;
 
     if (expectedNeedsLeadingComma)
       expectedFormatted += ", ";
-    if (receivedNeedsLeadingComma)
-      receivedFormatted += ", ";
+    if (actualNeedsLeadingComma)
+      actualFormatted += ", ";
 
-    if (expectedElement == receivedElement) {
+    if (expectedElement == actualElement) {
       expectedFormatted += FormatValue(expectedElement);
-      receivedFormatted += FormatValue(receivedElement);
+      actualFormatted += FormatValue(actualElement);
     }
     else {
       expectedFormatted += Ansi::AnsiFormatter::DiffExpected(FormatValue(expectedElement));
-      receivedFormatted += Ansi::AnsiFormatter::DiffReceived(FormatValue(receivedElement));
+      actualFormatted += Ansi::AnsiFormatter::DiffReceived(FormatValue(actualElement));
     }
 
     expectedNeedsLeadingComma = true;
-    receivedNeedsLeadingComma = true;
+    actualNeedsLeadingComma = true;
 
     ++expectedIterator;
-    ++receivedIterator;
+    ++actualIterator;
   }
 
-  // Elements expected has that received is missing
+  // Elements expected has that actual is missing
   for (std::ptrdiff_t missingIndex = commonSize; missingIndex < expectedSize; ++missingIndex) {
     if (expectedNeedsLeadingComma)
       expectedFormatted += ", ";
-    if (receivedNeedsLeadingComma)
-      receivedFormatted += ", ";
+    if (actualNeedsLeadingComma)
+      actualFormatted += ", ";
 
     expectedFormatted += Ansi::AnsiFormatter::DiffExpected(FormatValue(*expectedIterator));
-    receivedFormatted += Ansi::AnsiFormatter::DiffMissing(1);
+    actualFormatted += Ansi::AnsiFormatter::DiffMissing(1);
 
     expectedNeedsLeadingComma = true;
-    receivedNeedsLeadingComma = true;
+    actualNeedsLeadingComma = true;
 
     ++expectedIterator;
   }
 
-  // Elements received has that expected does not
-  for (std::ptrdiff_t extraIndex = commonSize; extraIndex < receivedSize; ++extraIndex) {
-    if (receivedNeedsLeadingComma)
-      receivedFormatted += ", ";
+  // Elements actual has that expected does not
+  for (std::ptrdiff_t extraIndex = commonSize; extraIndex < actualSize; ++extraIndex) {
+    if (actualNeedsLeadingComma)
+      actualFormatted += ", ";
 
-    // expected side gets nothing — no placeholder, no comma advance beyond the bracket
-    receivedFormatted += Ansi::AnsiFormatter::DiffExtra(FormatValue(*receivedIterator));
+    actualFormatted += Ansi::AnsiFormatter::DiffExtra(FormatValue(*actualIterator));
 
-    receivedNeedsLeadingComma = true;
+    actualNeedsLeadingComma = true;
 
-    ++receivedIterator;
+    ++actualIterator;
   }
 
   expectedFormatted += "]";
-  receivedFormatted += "]";
+  actualFormatted += "]";
 
-  OutputDiffToStderr(expectedFormatted, receivedFormatted);
+  OutputDiffToStderr(expectedFormatted, actualFormatted);
 }
 
 inline void fail(const char* file, int line, const char* msg)
@@ -172,7 +182,9 @@ template <typename TValue, typename TEpsilon>
 inline void
 assert_near(TValue actual, TValue expected, TEpsilon epsilon, const char* file, int line)
 {
-  if (std::abs(actual - expected) > epsilon) {
+  const TValue difference = (actual > expected) ? (actual - expected) : (expected - actual);
+
+  if (difference > epsilon) {
     fail(file, line, "Values not within epsilon:");
     OutputDiffToStderr(
         Ansi::AnsiFormatter::DiffExpected(FormatValue(expected) + " ± " + FormatValue(epsilon)),
@@ -183,124 +195,172 @@ assert_near(TValue actual, TValue expected, TEpsilon epsilon, const char* file, 
 
 template <typename A, typename B>
   requires(!Iterable<A> && !Iterable<B> && !(StringLike<A> && StringLike<B>))
-void assert_equal_impl(const A& expectedValue, const B& receivedValue, const char* file, int line)
+void assert_equal_impl(const A& actualValue, const B& expectedValue, const char* file, int line)
 {
-  if (!(expectedValue == receivedValue)) {
+  if (!(actualValue == expectedValue)) {
     fail(file, line, "Values differ:");
     OutputDiffToStderr(
         Ansi::AnsiFormatter::DiffExpected(FormatValue(expectedValue)),
-        Ansi::AnsiFormatter::DiffReceived(FormatValue(receivedValue))
+        Ansi::AnsiFormatter::DiffReceived(FormatValue(actualValue))
     );
   }
 }
 
-template <StringLike ExpectedString, StringLike ReceivedString>
+template <StringLike ActualString, StringLike ExpectedString>
 void assert_equal_impl(
+    const ActualString& actualString,
     const ExpectedString& expectedString,
-    const ReceivedString& receivedString,
     const char* file,
     int line
 )
 {
+  const std::string_view actualText{actualString};
   const std::string_view expectedText{expectedString};
-  const std::string_view receivedText{receivedString};
 
-  if (expectedText != receivedText) {
+  if (actualText != expectedText) {
     fail(file, line, "Strings differ:");
-    OutputStringDiff(std::string(expectedText), std::string(receivedString));
+    OutputStringDiff(std::string(expectedText), std::string(actualText));
   }
 }
 
-template <class T, std::size_t expectedArraySize, class U, std::size_t receivedArraySize>
+template <class T, std::size_t actualArraySize, class U, std::size_t expectedArraySize>
   requires(!std::same_as<std::remove_cv_t<T>, char>)
 void assert_equal_impl(
-    const T (&expectedArray)[expectedArraySize],
-    const U (&receivedArray)[receivedArraySize],
+    const T (&actualArray)[actualArraySize],
+    const U (&expectedArray)[expectedArraySize],
     const char* file,
     int line
 )
 {
-  if constexpr (expectedArraySize != receivedArraySize) {
-    fail(file, line, "Array sizes differ:");
-  }
-  std::span expectedSpan(expectedArray, expectedArraySize);
-  std::span receivedSpan(receivedArray, receivedArraySize);
-  bool arraysAreEqual =
-      (expectedArraySize == receivedArraySize) &&
-      std::equal(std::begin(expectedArray), std::end(expectedArray), std::begin(receivedArray));
+  const std::span actualSpan(actualArray, actualArraySize);
+  const std::span expectedSpan(expectedArray, expectedArraySize);
+
+  const bool arraysAreEqual =
+      (actualArraySize == expectedArraySize) &&
+      std::equal(std::begin(actualArray), std::end(actualArray), std::begin(expectedArray));
 
   if (!arraysAreEqual) {
     fail(
-        file, line,
-        expectedArraySize != receivedArraySize ? "Array sizes differ:" : "Arrays differ:"
+        file, line, actualArraySize != expectedArraySize ? "Array sizes differ:" : "Arrays differ:"
     );
-    OutputContainerDiff(expectedSpan, receivedSpan);
+    OutputContainerDiff(expectedSpan, actualSpan);
   }
 }
 
-template <Iterable ContainerA, Iterable ContainerB>
-  requires(!(StringLike<ContainerA> && StringLike<ContainerB>))
+template <Iterable ActualContainer, Iterable ExpectedContainer>
+  requires(!(StringLike<ActualContainer> && StringLike<ExpectedContainer>))
 void assert_equal_impl(
-    const ContainerA& expectedContainer,
-    const ContainerB& receivedContainer,
+    const ActualContainer& actualContainer,
+    const ExpectedContainer& expectedContainer,
     const char* file,
     int line
 )
 {
+  const auto actualSize = std::distance(std::begin(actualContainer), std::end(actualContainer));
   const auto expectedSize =
       std::distance(std::begin(expectedContainer), std::end(expectedContainer));
-  const auto receivedSize =
-      std::distance(std::begin(receivedContainer), std::end(receivedContainer));
 
-  bool containersAreEqual =
-      (expectedSize == receivedSize) &&
+  const bool containersAreEqual =
+      (actualSize == expectedSize) &&
       std::equal(
-          std::begin(expectedContainer), std::end(expectedContainer), std::begin(receivedContainer)
+          std::begin(actualContainer), std::end(actualContainer), std::begin(expectedContainer)
       );
 
   if (!containersAreEqual) {
     fail(file, line, "Containers differ:");
-    OutputContainerDiff(expectedContainer, receivedContainer);
+    OutputContainerDiff(expectedContainer, actualContainer);
   }
 }
 
 template <class A, class B>
-void assert_equal(const A& expected, const B& received, const char* file, int line)
+void assert_equal(const A& actual, const B& expected, const char* file, int line)
 {
-  assert_equal_impl(expected, received, file, line);
+  assert_equal_impl(actual, expected, file, line);
 }
 
-template <class A, class B>
-void assert_not_equal(const A& expected, const B& received, const char* file, int line)
+template <typename A, typename B>
+  requires(!Iterable<A> && !Iterable<B> && !(StringLike<A> && StringLike<B>))
+void assert_not_equal_impl(const A& actualValue, const B& expectedValue, const char* file, int line)
 {
-  if (expected == received) {
+  if (actualValue == expectedValue) {
     fail(file, line, "Expected values to differ but they were equal:");
-    OutputDiffToStderr(FormatValue(expected), FormatValue(received));
+    OutputDiffToStderr(FormatValue(expectedValue), FormatValue(actualValue));
   }
+}
+
+template <StringLike ActualString, StringLike ExpectedString>
+void assert_not_equal_impl(
+    const ActualString& actualString,
+    const ExpectedString& expectedString,
+    const char* file,
+    int line
+)
+{
+  const std::string_view actualText{actualString};
+  const std::string_view expectedText{expectedString};
+
+  if (actualText == expectedText) {
+    fail(file, line, "Expected strings to differ but they were equal:");
+    OutputDiffToStderr(
+        "\"" + std::string(expectedText) + "\"", "\"" + std::string(actualText) + "\""
+    );
+  }
+}
+
+template <Iterable ActualContainer, Iterable ExpectedContainer>
+  requires(!(StringLike<ActualContainer> && StringLike<ExpectedContainer>))
+void assert_not_equal_impl(
+    const ActualContainer& actualContainer,
+    const ExpectedContainer& expectedContainer,
+    const char* file,
+    int line
+)
+{
+  const auto actualSize = std::distance(std::begin(actualContainer), std::end(actualContainer));
+  const auto expectedSize =
+      std::distance(std::begin(expectedContainer), std::end(expectedContainer));
+
+  const bool containersAreEqual =
+      (actualSize == expectedSize) &&
+      std::equal(
+          std::begin(actualContainer), std::end(actualContainer), std::begin(expectedContainer)
+      );
+
+  if (containersAreEqual) {
+    fail(file, line, "Expected containers to differ but they were equal:");
+    OutputContainerDiff(expectedContainer, actualContainer);
+  }
+}
+
+template <class A, class B>
+void assert_not_equal(const A& actual, const B& expected, const char* file, int line)
+{
+  assert_not_equal_impl(actual, expected, file, line);
 }
 
 template <typename TExceptionType, typename TCallable>
 inline void assert_throws(TCallable&& callable, const char* expression, const char* file, int line)
 {
-  bool did_throw = false;
+  bool didThrow = false;
+
   try {
     callable();
   }
   catch (const TExceptionType&) {
-    did_throw = true;
+    didThrow = true;
   }
   catch (...) {
-    TestFailHandlerRegistry::GetInstance().NotifyTestFail(
-        file, line,
-        (std::string("ASSERT_THROWS failed: ") + expression + " threw an unexpected exception type")
-            .c_str()
-    );
+    const std::string message =
+        std::string("ASSERT_THROWS failed: ") + expression + " threw an unexpected exception type";
+    fail(file, line, message.c_str());
     return;
   }
-  if (!did_throw)
-    TestFailHandlerRegistry::GetInstance().NotifyTestFail(
-        file, line, (std::string("ASSERT_THROWS failed: ") + expression + " did not throw").c_str()
-    );
+
+  if (!didThrow) {
+    const std::string message =
+        std::string("ASSERT_THROWS failed: ") + expression + " did not throw";
+    fail(file, line, message.c_str());
+  }
 }
 
 } // namespace Cimmerian::Assertions
