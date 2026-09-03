@@ -45,6 +45,30 @@ public:
   // Prefix symbols
   static std::string ExpectedPrefix() { return Green("Expected"); }
   static std::string ReceivedPrefix() { return Red("Received"); }
+
+  // Removes ANSI SGR sequences (ESC '[' ... 'm'), the only kind this class
+  // emits. For callers that want the underlying text without color/style -
+  // e.g. persisting a captured failure message to a plain-text snapshot
+  // file - rather than the exact colored terminal output.
+  static std::string StripCodes(const std::string& text)
+  {
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t i = 0; i < text.size();) {
+      if (text[i] == '\x1b' && i + 1 < text.size() && text[i + 1] == '[') {
+        std::size_t end = i + 2;
+        while (end < text.size() && text[end] != 'm') {
+          ++end;
+        }
+        i = (end < text.size()) ? end + 1 : end;
+      }
+      else {
+        out += text[i];
+        ++i;
+      }
+    }
+    return out;
+  }
 };
 
 } // namespace Cimmerian::Ansi

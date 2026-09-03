@@ -63,33 +63,40 @@ FormatStringDiff(const std::string& expectedString, const std::string& actualStr
   const std::size_t actualLength = actualString.size();
   const std::size_t commonLength = std::min(expectedLength, actualLength);
 
-  for (std::size_t charIndex = 0; charIndex < commonLength; ++charIndex) {
-    const char expectedChar = expectedString[charIndex];
-    const char actualChar = actualString[charIndex];
+  // Group consecutive matching/differing characters into runs and wrap each
+  // run once, rather than wrapping every character individually - a handful
+  // of colored spans reads far better than one ANSI code per character.
+  std::size_t runStart = 0;
+  while (runStart < commonLength) {
+    const bool runIsDiff = expectedString[runStart] != actualString[runStart];
 
-    if (expectedChar == actualChar) {
-      expectedFormatted += expectedChar;
-      actualFormatted += actualChar;
+    std::size_t runEnd = runStart + 1;
+    while (runEnd < commonLength && (expectedString[runEnd] != actualString[runEnd]) == runIsDiff) {
+      ++runEnd;
+    }
+
+    const std::string expectedRun = expectedString.substr(runStart, runEnd - runStart);
+    const std::string actualRun = actualString.substr(runStart, runEnd - runStart);
+
+    if (runIsDiff) {
+      expectedFormatted += Ansi::AnsiFormatter::DiffExpected(expectedRun);
+      actualFormatted += Ansi::AnsiFormatter::DiffReceived(actualRun);
     }
     else {
-      expectedFormatted += Ansi::AnsiFormatter::DiffExpected(std::string(1, expectedChar));
-      actualFormatted += Ansi::AnsiFormatter::DiffReceived(std::string(1, actualChar));
+      expectedFormatted += expectedRun;
+      actualFormatted += actualRun;
     }
+
+    runStart = runEnd;
   }
 
   if (expectedLength > actualLength) {
-    const std::size_t missingCount = expectedLength - actualLength;
-    for (std::size_t missingIndex = 0; missingIndex < missingCount; ++missingIndex) {
-      expectedFormatted += Ansi::AnsiFormatter::DiffExpected(
-          std::string(1, expectedString[actualLength + missingIndex])
-      );
-    }
-    actualFormatted += Ansi::AnsiFormatter::DiffMissing(missingCount);
+    expectedFormatted += Ansi::AnsiFormatter::DiffExpected(expectedString.substr(actualLength));
+    actualFormatted += Ansi::AnsiFormatter::DiffMissing(expectedLength - actualLength);
   }
 
   if (actualLength > expectedLength) {
-    const std::string extraChars = actualString.substr(expectedLength);
-    actualFormatted += Ansi::AnsiFormatter::DiffExtra(extraChars);
+    actualFormatted += Ansi::AnsiFormatter::DiffExtra(actualString.substr(expectedLength));
   }
 
   return FormatDiff("\"" + expectedFormatted + "\"", "\"" + actualFormatted + "\"");
@@ -196,10 +203,8 @@ assert_near(TValue actual, TValue expected, TEpsilon epsilon, const char* file, 
         WithDetail(
             "Values not within epsilon:",
             FormatDiff(
-                Ansi::AnsiFormatter::DiffExpected(
-                    FormatValue(expected) + " ± " + FormatValue(epsilon),
-                    Ansi::AnsiFormatter::DiffReceived(FormatValue(actual))
-                )
+                Ansi::AnsiFormatter::DiffExpected(FormatValue(expected) + " ± " + FormatValue(epsilon)),
+                Ansi::AnsiFormatter::DiffReceived(FormatValue(actual))
             )
         )
     );

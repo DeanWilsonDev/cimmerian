@@ -217,7 +217,7 @@ Screenshot MacOSScreenCapture::Capture(void* windowHandle)
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGContextRef context = CGBitmapContextCreate(
         shot.pixels.data(), width, height, 8, width * 4, colorSpace,
-        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big
+        static_cast<uint32_t>(kCGImageAlphaPremultipliedLast) | static_cast<uint32_t>(kCGBitmapByteOrder32Big)
     );
     CGColorSpaceRelease(colorSpace);
 

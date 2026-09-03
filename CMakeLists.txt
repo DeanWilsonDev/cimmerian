@@ -23,14 +23,17 @@ endif()
 # -------------------------
 # Optional feature toggles
 # -------------------------
-# Both default OFF: snapshot and visual testing pull in their own source
-# files (and, for visual, a platform capture/injection backend with its own
-# system dependencies) that most consumers don't need. Each is independent -
-# enabling one does not require the other.
+# Both default OFF for consumers: snapshot and visual testing pull in their
+# own source files (and, for visual, a platform capture/injection backend
+# with its own system dependencies) that most consumers don't need. Each is
+# independent - enabling one does not require the other. When cimmerian is
+# the root project (i.e. building its own tests), default both ON so
+# `cmake -B build && cmake --build build` exercises the full test suite
+# without extra flags.
 option(CIMMERIAN_ENABLE_SNAPSHOT_TESTING "Compile in snapshot testing support"
-       OFF)
+       ${CIMMERIAN_IS_ROOT_PROJECT})
 option(CIMMERIAN_ENABLE_VISUAL_TESTING
-       "Compile in visual regression testing support" OFF)
+       "Compile in visual regression testing support" ${CIMMERIAN_IS_ROOT_PROJECT})
 
 # -------------------------
 # Library target
@@ -252,7 +255,10 @@ endif()
 # -------------------------
 # Cimmerian is a dev/test dependency: when it's pulled in as a subdirectory by
 # another project (amanuensis, firefly, ...) we only want the library, never
-# cimmerian's own test executable.
+# cimmerian's own test executable. Defaulting this to CIMMERIAN_IS_ROOT_PROJECT
+# (rather than plain ON) is what makes that automatic: a consumer's
+# add_subdirectory(cimmerian) sets CIMMERIAN_IS_ROOT_PROJECT to OFF above, so
+# test_cimmerian is never added to their build unless they explicitly opt in.
 option(CIMMERIAN_BUILD_TESTS "Build cimmerian tests"
        ${CIMMERIAN_IS_ROOT_PROJECT})
 

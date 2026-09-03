@@ -42,28 +42,28 @@ inline TestGroup* _test_group = nullptr;
 #define BEFORE_EACH(BODY)                                                                          \
   do {                                                                                             \
     Cimmerian::TestRegistry::GetInstance().SetBeforeEach(                                          \
-        _test_group, +[](void* user) BODY, nullptr, nullptr                                        \
+        _test_group, +[]([[maybe_unused]] void* user) BODY, nullptr, nullptr                                        \
     );                                                                                             \
   } while (0)
 
 #define AFTER_EACH(BODY)                                                                           \
   do {                                                                                             \
     Cimmerian::TestRegistry::GetInstance().SetAfterEach(                                           \
-        _test_group, +[](void* user) BODY, nullptr, nullptr                                        \
+        _test_group, +[]([[maybe_unused]] void* user) BODY, nullptr, nullptr                                        \
     );                                                                                             \
   } while (0)
 
 #define BEFORE_ALL(BODY)                                                                           \
   do {                                                                                             \
     Cimmerian::TestRegistry::GetInstance().SetBeforeAll(                                           \
-        _test_group, +[](void* user) BODY, nullptr, nullptr                                        \
+        _test_group, +[]([[maybe_unused]] void* user) BODY, nullptr, nullptr                                        \
     );                                                                                             \
   } while (0)
 
 #define AFTER_ALL(BODY)                                                                            \
   do {                                                                                             \
     Cimmerian::TestRegistry::GetInstance().SetAfterAll(                                            \
-        _test_group, +[](void* user) BODY, nullptr, nullptr                                        \
+        _test_group, +[]([[maybe_unused]] void* user) BODY, nullptr, nullptr                                        \
     );                                                                                             \
   } while (0)
 
@@ -177,15 +177,32 @@ inline TestGroup* _test_group = nullptr;
     );                                                                                             \
   } while (0)
 
+
+#define CAPTURE_FAILURE_MESSAGE(expression)                                                        \
+  Cimmerian::TestRunner::GetActive()->CaptureFailureMessage([&]() { expression; })
+
+#define ASSERT_FAILS(expression)                                                                   \
+  do {                                                                                             \
+    const bool _assertFailsResult =                                                                \
+        Cimmerian::TestRunner::GetActive()->ExpectFailure([&]() { expression; });                  \
+    if (!_assertFailsResult) {                                                                     \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__,                                                                      \
+          "ASSERT_FAILS: expected a failure but none occurred: " #expression                       \
+      );                                                                                           \
+    }                                                                                              \
+  } while (0)
+
 #define ASSERT_NO_THROW(expression)                                                                \
   do {                                                                                             \
     try {                                                                                          \
       (expression);                                                                                \
     }                                                                                              \
     catch (const std::exception& _e) {                                                             \
+      const std::string _assertNoThrowMessage =                                                    \
+          "ASSERT_NO_THROW failed: " #expression " threw: " + std::string(_e.what());              \
       Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
-          __FILE__, __LINE__,                                                                      \
-          "ASSERT_NO_THROW failed: " #expression " threw: " + std::string(_e.what())               \
+          __FILE__, __LINE__, _assertNoThrowMessage.c_str()                                        \
       );                                                                                           \
     }                                                                                              \
     catch (...) {                                                                                  \

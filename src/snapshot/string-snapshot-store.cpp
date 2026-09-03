@@ -1,5 +1,6 @@
 #include "cimmerian/snapshot/string-snapshot-store.hpp"
 #include "cimmerian/snapshot/snapshot-run-mode.hpp"
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -9,6 +10,63 @@ namespace Cimmerian::Snapshot {
 namespace fs = std::filesystem;
 
 static constexpr const char* MARKER_PREFIX = "# Snapshot: ";
+
+// Captured failure messages carry ANSI escape codes (color, underline, ...)
+// so ASSERT_STRING_SNAPSHOT can pin exact formatting. Those raw control bytes
+// are opaque in a text editor, so on-disk we escape them to a readable form
+// (e.g. ESC -> "\e") and reverse it on load; in-memory values always carry
+// the real bytes, so comparisons still catch formatting regressions.
+static std::string EscapeControlChars(const std::string& raw)
+{
+  std::string out;
+  out.reserve(raw.size());
+  for (unsigned char c : raw) {
+    if (c == '\x1b') {
+      out += "\\e";
+    }
+    else if (c == '\\') {
+      out += "\\\\";
+    }
+    else if (c < 0x20 && c != '\n') {
+      char buf[5];
+      std::snprintf(buf, sizeof(buf), "\\x%02x", c);
+      out += buf;
+    }
+    else {
+      out += static_cast<char>(c);
+    }
+  }
+  return out;
+}
+
+static std::string UnescapeControlChars(const std::string& escaped)
+{
+  std::string out;
+  out.reserve(escaped.size());
+  for (std::size_t i = 0; i < escaped.size(); ++i) {
+    if (escaped[i] == '\\' && i + 1 < escaped.size()) {
+      const char next = escaped[i + 1];
+      if (next == 'e') {
+        out += '\x1b';
+        ++i;
+        continue;
+      }
+      if (next == '\\') {
+        out += '\\';
+        ++i;
+        continue;
+      }
+      if (next == 'x' && i + 3 < escaped.size()) {
+        const std::string hex = escaped.substr(i + 2, 2);
+        out += static_cast<char>(std::stoi(hex, nullptr, 16));
+        i += 3;
+        continue;
+      }
+    }
+    out += escaped[i];
+  }
+  return out;
+}
 
 std::optional<std::string> SnapFile::Find(const std::string& key) const
 {
@@ -48,7 +106,7 @@ SnapFile SnapFile::Parse(const std::string& fileContents)
       for (int i = 0; i < 2 && !currentContent.empty() && currentContent.back() == '\n'; ++i) {
         currentContent.pop_back();
       }
-      file.Set(currentKey, currentContent);
+      file.Set(currentKey, UnescapeControlChars(currentContent));
     }
     currentContent.clear();
   };
@@ -76,7 +134,7 @@ std::string SnapFile::Serialize() const
     out += MARKER_PREFIX;
     out += key;
     out += '\n';
-    out += value;
+    out += EscapeControlChars(value);
     out += '\n';
     out += '\n';
   }

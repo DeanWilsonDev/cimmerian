@@ -1,0 +1,55 @@
+# Snapshot: Scalar Equality > scalar-int-diff
+Values differ:
+    Expected  2
+    Received  1
+
+# Snapshot: Near Equality > near-epsilon-exceeded
+Values not within epsilon:
+    Expected  2 ± 0.01
+    Received  1
+
+# Snapshot: String Equality > string-char-diff
+Strings differ:
+    Expected  "expected"
+    Received  "received"
+
+# Snapshot: String Equality > string-actual-shorter
+Strings differ:
+    Expected  "hello"
+    Received  "hi∅∅∅"
+
+# Snapshot: String Equality > string-actual-longer
+Strings differ:
+    Expected  "hello"
+    Received  "hello world"
+
+# Snapshot: C-Style Array Equality > array-element-diff
+Arrays differ:
+    Expected  [1, 2, 3]
+    Received  [1, 99, 3]
+
+# Snapshot: C-Style Array Equality > array-size-diff
+Array sizes differ:
+    Expected  [1, 2]
+    Received  [1, 2, 3]
+
+# Snapshot: Vector Equality > vector-extra-elements
+Containers differ:
+    Expected  [1, 2]
+    Received  [1, 2, 3]
+
+# Snapshot: Vector Equality > vector-missing-elements
+Containers differ:
+    Expected  [1, 2, 3]
+    Received  [1, 2, ∅]
+
+# Snapshot: Vector Equality > vector-element-diff
+Containers differ:
+    Expected  [1, 2, 3]
+    Received  [1, 99, 3]
+
+# Snapshot: std::array Equality > std-array-element-diff
+Containers differ:
+    Expected  [7, 8, 9]
+    Received  [7, 0, 9]
+

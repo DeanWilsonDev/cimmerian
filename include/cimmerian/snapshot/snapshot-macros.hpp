@@ -56,7 +56,7 @@ inline void AssertStringSnapshotImpl(
   accumulator.RecordFailed();
   const std::string keyString = SnapshotKeyToString(key);
   Cimmerian::Assertions::fail(file, line, ("SNAPSHOT MISMATCH: \"" + keyString + "\"").c_str());
-  Cimmerian::Assertions::OutputStringDiff(*existing, serializedValue);
+  std::cerr << Cimmerian::Assertions::FormatStringDiff(*existing, serializedValue) << "\n";
   std::cerr << "Run with --update-snapshots to accept the new value.\n";
 }
 
@@ -91,7 +91,7 @@ inline void AssertInlineSnapshotImpl(
 
   accumulator.RecordFailed();
   Cimmerian::Assertions::fail(file, line, "INLINE SNAPSHOT MISMATCH:");
-  Cimmerian::Assertions::OutputStringDiff(currentSnapshot, serializedValue);
+  std::cerr << Cimmerian::Assertions::FormatStringDiff(currentSnapshot, serializedValue) << "\n";
   std::cerr << "Run with --update-snapshots to accept the new value.\n";
 }
 
