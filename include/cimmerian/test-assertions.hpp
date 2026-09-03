@@ -3,7 +3,6 @@
 #include "ansi-formatter.hpp"
 #include <algorithm>
 #include <concepts>
-#include <iostream>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -46,13 +45,14 @@ template <typename T> std::string FormatValue(const T& value)
   }
 }
 
-inline void OutputDiffToStderr(const std::string& expectedLine, const std::string& actualLine)
+inline std::string FormatDiff(const std::string& expectedLine, const std::string& actualLine)
 {
-  std::cerr << "  " << Ansi::AnsiFormatter::ExpectedPrefix() << " " << expectedLine << "\n";
-  std::cerr << "  " << Ansi::AnsiFormatter::ReceivedPrefix() << " " << actualLine << "\n";
+  return "  " + Ansi::AnsiFormatter::ExpectedPrefix() + " " + expectedLine + "\n";
+  return "  " + Ansi::AnsiFormatter::ReceivedPrefix() + " " + actualLine;
 }
 
-inline void OutputStringDiff(const std::string& expectedString, const std::string& actualString)
+inline std::string
+FormatStringDiff(const std::string& expectedString, const std::string& actualString)
 {
   std::string expectedFormatted;
   std::string actualFormatted;
@@ -90,11 +90,11 @@ inline void OutputStringDiff(const std::string& expectedString, const std::strin
     actualFormatted += Ansi::AnsiFormatter::DiffExtra(extraChars);
   }
 
-  OutputDiffToStderr("\"" + expectedFormatted + "\"", "\"" + actualFormatted + "\"");
+  return FormatDiff("\"" + expectedFormatted + "\"", "\"" + actualFormatted + "\"");
 }
 
 template <Iterable ExpectedContainer, Iterable ActualContainer>
-void OutputContainerDiff(
+std::string FormatContainerDiff(
     const ExpectedContainer& expectedContainer,
     const ActualContainer& actualContainer
 )
@@ -109,7 +109,6 @@ void OutputContainerDiff(
 
   std::string expectedFormatted = "[";
   std::string actualFormatted = "[";
-
   bool expectedNeedsLeadingComma = false;
   bool actualNeedsLeadingComma = false;
 
@@ -133,7 +132,6 @@ void OutputContainerDiff(
 
     expectedNeedsLeadingComma = true;
     actualNeedsLeadingComma = true;
-
     ++expectedIterator;
     ++actualIterator;
   }
@@ -150,7 +148,6 @@ void OutputContainerDiff(
 
     expectedNeedsLeadingComma = true;
     actualNeedsLeadingComma = true;
-
     ++expectedIterator;
   }
 
@@ -160,22 +157,29 @@ void OutputContainerDiff(
       actualFormatted += ", ";
 
     actualFormatted += Ansi::AnsiFormatter::DiffExtra(FormatValue(*actualIterator));
-
     actualNeedsLeadingComma = true;
-
     ++actualIterator;
   }
 
   expectedFormatted += "]";
   actualFormatted += "]";
 
-  OutputDiffToStderr(expectedFormatted, actualFormatted);
+  return FormatDiff(expectedFormatted, actualFormatted);
+}
+
+inline void fail(const char* file, int line, const std::string& msg)
+{
+  TestFailHandlerRegistry::GetInstance().NotifyTestFail(file, line, msg.c_str());
 }
 
 inline void fail(const char* file, int line, const char* msg)
 {
-  std::cerr << file << ":" << line << ": ASSERTION FAILED: " << msg << "\n";
-  TestFailHandlerRegistry::GetInstance().NotifyTestFail(file, line, msg);
+  fail(file, line, std::string(msg));
+}
+
+inline std::string WithDetail(std::string_view message, const std::string& detail)
+{
+  return std::string(message) + "\n" + detail;
 }
 
 template <typename TValue, typename TEpsilon>
@@ -185,10 +189,17 @@ assert_near(TValue actual, TValue expected, TEpsilon epsilon, const char* file, 
   const TValue difference = (actual > expected) ? (actual - expected) : (expected - actual);
 
   if (difference > epsilon) {
-    fail(file, line, "Values not within epsilon:");
-    OutputDiffToStderr(
-        Ansi::AnsiFormatter::DiffExpected(FormatValue(expected) + " ± " + FormatValue(epsilon)),
-        Ansi::AnsiFormatter::DiffReceived(FormatValue(actual))
+    fail(
+        file, line,
+        WithDetail(
+            "Values not within epsilon:",
+            FormatDiff(
+                Ansi::AnsiFormatter::DiffExpected(
+                    FormatValue(expected) + " ± " + FormatValue(epsilon),
+                    Ansi::AnsiFormatter::DiffReceived(FormatValue(actual))
+                )
+            )
+        )
     );
   }
 }
@@ -198,10 +209,14 @@ template <typename A, typename B>
 void assert_equal_impl(const A& actualValue, const B& expectedValue, const char* file, int line)
 {
   if (!(actualValue == expectedValue)) {
-    fail(file, line, "Values differ:");
-    OutputDiffToStderr(
-        Ansi::AnsiFormatter::DiffExpected(FormatValue(expectedValue)),
-        Ansi::AnsiFormatter::DiffReceived(FormatValue(actualValue))
+    fail(
+        file, line,
+        WithDetail(
+            "Values differ:", FormatDiff(
+                                  Ansi::AnsiFormatter::DiffExpected(FormatValue(expectedValue)),
+                                  Ansi::AnsiFormatter::DiffReceived(FormatValue(actualValue))
+                              )
+        )
     );
   }
 }
@@ -218,8 +233,12 @@ void assert_equal_impl(
   const std::string_view expectedText{expectedString};
 
   if (actualText != expectedText) {
-    fail(file, line, "Strings differ:");
-    OutputStringDiff(std::string(expectedText), std::string(actualText));
+    fail(
+        file, line,
+        WithDetail(
+            "Strings differ:", FormatStringDiff(std::string(expectedText), std::string(actualText))
+        )
+    );
   }
 }
 
@@ -241,9 +260,12 @@ void assert_equal_impl(
 
   if (!arraysAreEqual) {
     fail(
-        file, line, actualArraySize != expectedArraySize ? "Array sizes differ:" : "Arrays differ:"
+        file, line,
+        WithDetail(
+            actualArraySize != expectedArraySize ? "Array sizes differ:" : "Arrays differ:",
+            FormatContainerDiff(expectedSpan, actualSpan)
+        )
     );
-    OutputContainerDiff(expectedSpan, actualSpan);
   }
 }
 
@@ -267,8 +289,10 @@ void assert_equal_impl(
       );
 
   if (!containersAreEqual) {
-    fail(file, line, "Containers differ:");
-    OutputContainerDiff(expectedContainer, actualContainer);
+    fail(
+        file, line,
+        WithDetail("Containers differ:", FormatContainerDiff(expectedContainer, actualContainer))
+    );
   }
 }
 
@@ -283,8 +307,13 @@ template <typename A, typename B>
 void assert_not_equal_impl(const A& actualValue, const B& expectedValue, const char* file, int line)
 {
   if (actualValue == expectedValue) {
-    fail(file, line, "Expected values to differ but they were equal:");
-    OutputDiffToStderr(FormatValue(expectedValue), FormatValue(actualValue));
+    fail(
+        file, line,
+        WithDetail(
+            "Expected values to differ but they were equal:",
+            " both were: " + Ansi::AnsiFormatter::DiffReceived(FormatValue(actualValue))
+        )
+    );
   }
 }
 
@@ -300,9 +329,12 @@ void assert_not_equal_impl(
   const std::string_view expectedText{expectedString};
 
   if (actualText == expectedText) {
-    fail(file, line, "Expected strings to differ but they were equal:");
-    OutputDiffToStderr(
-        "\"" + std::string(expectedText) + "\"", "\"" + std::string(actualText) + "\""
+    fail(
+        file, line,
+        WithDetail(
+            "Expected strings to differ but they were equal:",
+            "  both were: \"" + Ansi::AnsiFormatter::DiffReceived(std::string(actualText)) + "\""
+        )
     );
   }
 }
@@ -327,8 +359,13 @@ void assert_not_equal_impl(
       );
 
   if (containersAreEqual) {
-    fail(file, line, "Expected containers to differ but they were equal:");
-    OutputContainerDiff(expectedContainer, actualContainer);
+    fail(
+        file, line,
+        WithDetail(
+            "Expected containers to differ but they were equal:",
+            FormatContainerDiff(expectedContainer, actualContainer)
+        )
+    );
   }
 }
 
