@@ -47,8 +47,10 @@ template <typename T> std::string FormatValue(const T& value)
 
 inline std::string FormatDiff(const std::string& expectedLine, const std::string& actualLine)
 {
-  return "  " + Ansi::AnsiFormatter::ExpectedPrefix() + " " + expectedLine + "\n";
-  return "  " + Ansi::AnsiFormatter::ReceivedPrefix() + " " + actualLine;
+  std::string result;
+  result += "    " + Ansi::AnsiFormatter::ExpectedPrefix() + "  " + expectedLine + "\n";
+  result += "    " + Ansi::AnsiFormatter::ReceivedPrefix() + "  " + actualLine;
+  return result;
 }
 
 inline std::string

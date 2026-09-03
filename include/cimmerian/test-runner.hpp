@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <chrono>
 #include <string>
+#include <vector>
 
 namespace Cimmerian {
 
@@ -31,6 +32,12 @@ struct TestRunSummary {
   int snapshotsUpdated = 0;
   int snapshotsMissing = 0;
   int inlineRewriteCount = 0;
+};
+
+struct TestFailRecord {
+  std::string file;
+  int line;
+  std::string message;
 };
 
 class TestRunner : public ITestFailHandler {
@@ -67,6 +74,7 @@ private:
   bool isFailure;
   int totalFailures;
 
+  std::vector<TestFailRecord> pendingFailures;
   static inline TestRunner* activeInstance = nullptr;
 };
 

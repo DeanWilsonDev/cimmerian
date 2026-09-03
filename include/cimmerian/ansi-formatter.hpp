@@ -43,8 +43,8 @@ public:
   }
 
   // Prefix symbols
-  static std::string ExpectedPrefix() { return Green("+"); }
-  static std::string ReceivedPrefix() { return Red("-"); }
+  static std::string ExpectedPrefix() { return Green("Expected"); }
+  static std::string ReceivedPrefix() { return Red("Received"); }
 };
 
 } // namespace Cimmerian::Ansi

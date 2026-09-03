@@ -15,6 +15,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <cassert>
+#include <sstream>
 
 namespace Cimmerian {
 
@@ -43,6 +44,48 @@ TestRunner::TestRunner()
   activeInstance = this;
 }
 
+static std::string ExtractBasename(const std::string& filePath)
+{
+  const std::size_t lastSlashPosition = filePath.find_last_of("/\\");
+  return (lastSlashPosition == std::string::npos) ? filePath : filePath.substr(lastSlashPosition + 1);
+}
+
+static void PrintFailureBlock(const TestFailRecord& failure)
+{
+  constexpr const char* BLOCK_INDENT   = "      ";
+  constexpr const char* CONTENT_INDENT = "        ";
+
+  const std::string filename = ExtractBasename(failure.file);
+
+  std::printf("\n");
+
+  // Split message into lines; first line is the reason header, rest is the diff.
+  std::istringstream messageStream(failure.message);
+  std::string messageLine;
+  bool isReasonLine = true;
+
+  while (std::getline(messageStream, messageLine)) {
+    if (messageLine.empty()) continue;
+
+    if (isReasonLine) {
+      std::printf(
+          "%s%s%s%s\n\n", BLOCK_INDENT,
+          Ansi::ANSI_COLOR_BRIGHT_YELLOW, messageLine.c_str(), Ansi::ANSI_RESET
+      );
+      isReasonLine = false;
+    }
+    else {
+      std::printf("%s%s\n", CONTENT_INDENT, messageLine.c_str());
+    }
+  }
+
+  std::printf(
+      "\n%s%sat %s:%d%s\n",
+      BLOCK_INDENT, Ansi::ANSI_COLOR_BRIGHT_WHITE,
+      filename.c_str(), failure.line, Ansi::ANSI_RESET
+  );
+}
+
 void TestRunner::OnTestFail(const char* file, int line, const char* msg)
 {
   if (!this->inTest) {
@@ -50,11 +93,12 @@ void TestRunner::OnTestFail(const char* file, int line, const char* msg)
         stderr, "%s" TAG_ERROR "%s:%d: test failure outside of running test: %s\n",
         Ansi::ANSI_COLOR_BRIGHT_RED, file, line, msg
     );
+    return;
   }
 
   this->isFailure = true;
   this->totalFailures++;
-  TEST_LOG_PRINT(LogColor::Red, "[FAIL] {}:{} {}", file, line, msg);
+  this->pendingFailures.push_back({file, line, msg});
 }
 
 void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSummary* summary)
@@ -95,6 +139,11 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
         LogColor::Red, "[FAIL] [{}] {}  ({:.4f}ms)", CheckGroupName(group->GetName()),
         test->GetName(), elapsedTime.count()
     );
+    for (const TestFailRecord& failureRecord : this->pendingFailures) {
+      PrintFailureBlock(failureRecord);
+    }
+    this->pendingFailures.clear();
+    std::printf("\n");
   }
   else {
     summary->passed++;
