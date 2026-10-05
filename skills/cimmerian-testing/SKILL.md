@@ -31,7 +31,8 @@ target_compile_features(my_tests PUBLIC cxx_std_20)
 // test/test-main.cpp — write your own entry point...
 #include "cimmerian/test.hpp"
 
-int main() {
+int main(int argc, char* argv[]) {
+  Cimmerian::TestModeRegistry::GetInstance().ParseArgs(argc, argv); // --forbid-only / --forbid-skip
   Cimmerian::TestRunner runner;
   auto summary = runner.RunAll(&Cimmerian::TestRegistry::GetInstance());
   return summary.failed > 0 ? 1 : 0;
@@ -73,6 +74,28 @@ table-driven tests:
 void MyTest(void*) { ASSERT_TRUE(SomeCondition()); }
 IT_FN("my test", MyTest);
 ```
+
+### Skipping and focusing (`_SKIP` / `_ONLY`)
+
+Every registration macro has `_SKIP` and `_ONLY` variants: `DESCRIBE_SKIP`,
+`IT_ONLY`, `TEST_FN_SKIP`, `VISUAL_TEST_ONLY`,
+`VISUAL_DESCRIBE_COMPONENT_SKIP`, and so on.
+
+- `_SKIP`: the test (or every test in the group) doesn't run and prints as
+  `[SKIP]`. Its hooks don't fire.
+- `_ONLY`: once any test is `_ONLY` (directly or via a `DESCRIBE_ONLY`),
+  only `_ONLY` tests run. This applies across the whole binary, unit and
+  visual alike. Other tests are skipped silently.
+- `_SKIP` beats `_ONLY` at any nesting level.
+- Don't leave `_ONLY` in committed code, because it silently drops the rest
+  of the suite. The run summary prints `Focused run: ...` whenever one is
+  active.
+- In CI, pass `--forbid-only` and/or `--forbid-skip` to the test binary. If
+  any matching test exists, the runner runs nothing. It lists each offending
+  test by full group path and exits non-zero. `--forbid-only` also stops
+  `_ONLY` from focusing the run. A hand-written `main` must call
+  `TestModeRegistry::GetInstance().ParseArgs(argc, argv)` for the flags to
+  work; `test-entry-point.hpp` already does.
 
 ### Assertions
 

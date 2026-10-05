@@ -89,7 +89,8 @@ the flag to set, rather than an obscure link error.
 // test/test-main.cpp
 #include "cimmerian/test.hpp"
 
-int main() {
+int main(int argc, char* argv[]) {
+  Cimmerian::TestModeRegistry::GetInstance().ParseArgs(argc, argv); // --forbid-only / --forbid-skip
   Cimmerian::TestRunner runner;
   auto summary = runner.RunAll(&Cimmerian::TestRegistry::GetInstance());
   return summary.failed > 0 ? 1 : 0;
@@ -195,6 +196,65 @@ DESCRIBE("Database", {
 | `AFTER_ALL` | Once after all tests in the group |
 | `BEFORE_EACH` | Before every test in the group |
 | `AFTER_EACH` | After every test in the group |
+
+### Skipping and focusing tests
+
+Append `_SKIP` or `_ONLY` to any test or group macro.
+
+```cpp
+DESCRIBE("Parser", {
+  IT_SKIP("handles unicode", { ... });   // never runs, printed as [SKIP]
+  IT_ONLY("handles commas", { ... });    // focus: only _ONLY tests run
+});
+
+DESCRIBE_SKIP("Legacy", { ... });        // skips every test inside, nested groups included
+DESCRIBE_ONLY("Tokenizer", { ... });     // focuses every test inside
+```
+
+| Base | Variants |
+|---|---|
+| `DESCRIBE` | `DESCRIBE_SKIP`, `DESCRIBE_ONLY` |
+| `TEST` / `IT` | `TEST_SKIP`, `TEST_ONLY`, `IT_SKIP`, `IT_ONLY` |
+| `TEST_FN` / `IT_FN` | `TEST_FN_SKIP`, `TEST_FN_ONLY`, `IT_FN_SKIP`, `IT_FN_ONLY` |
+| `VISUAL_DESCRIBE` | `VISUAL_DESCRIBE_SKIP`, `VISUAL_DESCRIBE_ONLY` |
+| `VISUAL_DESCRIBE_COMPONENT` | `VISUAL_DESCRIBE_COMPONENT_SKIP`, `VISUAL_DESCRIBE_COMPONENT_ONLY` |
+| `VISUAL_TEST` | `VISUAL_TEST_SKIP`, `VISUAL_TEST_ONLY` |
+
+- A single `_ONLY` anywhere in the test binary, unit or visual, focuses the
+  whole run. Every other test is skipped without being printed, and the
+  summary notes that the run was focused.
+- `_SKIP` always wins: a test that is both skipped and focused (e.g. an
+  `IT_ONLY` inside a `DESCRIBE_SKIP`) is skipped and does not focus the run.
+- Hooks don't run for skipped tests. A group's `BEFORE_ALL`/`AFTER_ALL` run
+  only if at least one test inside it runs.
+- Skipped tests count toward the total and are reported as skipped:
+  `Summary: 10 total, 7 passed, 0 failed, 3 skipped`.
+
+#### Guarding against committed markers in CI
+
+```bash
+./build/my_tests --forbid-only --forbid-skip
+```
+
+| Flag | Effect |
+|---|---|
+| `--forbid-only` | Fails the run if any test is marked `_ONLY` (directly or via `DESCRIBE_ONLY`). `_ONLY` also stops focusing the run. |
+| `--forbid-skip` | Fails the run if any test is marked `_SKIP` (directly or via `DESCRIBE_SKIP`). |
+
+When a forbidden test is found, no tests in that runner (unit or visual)
+are run. The runner lists every offending test with its full group path and
+counts each one as a failure, so the process exits non-zero:
+
+```
+[ERROR] 2 forbidden test(s) found, not running any tests:
+  Parser > handles commas  (_ONLY is forbidden by --forbid-only)
+  Legacy > old path  (_SKIP is forbidden by --forbid-skip)
+```
+
+The provided entry point (`cimmerian/test-entry-point.hpp`) parses both
+flags. A hand-written `main` needs to call
+`Cimmerian::TestModeRegistry::GetInstance().ParseArgs(argc, argv)`, as in
+the Quick Start example.
 
 ---
 

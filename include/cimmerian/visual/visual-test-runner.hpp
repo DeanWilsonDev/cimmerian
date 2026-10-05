@@ -18,9 +18,10 @@ enum class VisualRunMode {
 };
 
 struct VisualTestRunSummary {
-  int total = 0;
+  int total = 0; // includes skipped tests
   int passed = 0;
   int failed = 0;
+  int skipped = 0; // *_SKIP'd, or left out by an *_ONLY elsewhere
   int updatedGoldens = 0; // in Update mode
   int missingGoldens = 0; // goldens that don't exist yet
   std::string reportPath; // in Review mode

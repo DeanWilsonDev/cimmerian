@@ -18,9 +18,10 @@ struct TestCaseTimingResult {
 };
 
 struct TestRunSummary {
-  int total = 0;
+  int total = 0; // includes skipped tests
   int passed = 0;
   int failed = 0;
+  int skipped = 0; // *_SKIP'd, or left out by an *_ONLY elsewhere
   TestDuration totalElapsedTime {0};
   TestDuration slowestTestElapsedTime {0};
   std::string slowestTestGroupName;

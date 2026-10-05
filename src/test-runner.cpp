@@ -10,6 +10,7 @@
 #include "cimmerian/test-fail-handler-registry.hpp"
 #include "cimmerian/test-group.hpp"
 #include "cimmerian/test-log.hpp"
+#include "cimmerian/test-mode.hpp"
 #include <chrono>
 #include <cstdio>
 #include <cstdarg>
@@ -101,8 +102,68 @@ void TestRunner::OnTestFail(const char* file, int line, const char* msg)
   this->pendingFailures.push_back({file, line, msg});
 }
 
+template <typename TPredicate>
+static bool AnyTestInSubtree(const TestGroup* group, TPredicate predicate)
+{
+  for (const TestCase& test : group->GetTests()) {
+    if (predicate(test)) {
+      return true;
+    }
+  }
+  for (size_t i = 0; i < group->GetChildCount(); ++i) {
+    if (AnyTestInSubtree(group->GetChild(i), predicate)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool WillRun(const TestCase& test)
+{
+  return TestModeRegistry::GetInstance().ShouldRun(test.GetMode());
+}
+
+// Tests left out by an _ONLY elsewhere aren't printed, so a group made up
+// entirely of those stays out of the output.
+static bool WillPrint(const TestCase& test)
+{
+  return test.GetMode() == TestMode::Skip || WillRun(test);
+}
+
+static void CollectForbiddenTests(const TestGroup* group, std::vector<std::string>* forbiddenTests)
+{
+  const TestModeRegistry& modes = TestModeRegistry::GetInstance();
+  for (const TestCase& test : group->GetTests()) {
+    if (modes.IsForbidden(test.GetMode())) {
+      const std::string groupPath = BuildGroupPath(group);
+      forbiddenTests->push_back(
+          (groupPath.empty() ? "" : groupPath + " > ") + test.GetName() + "  (" +
+          ForbiddenModeReason(test.GetMode()) + ")"
+      );
+    }
+  }
+  for (size_t i = 0; i < group->GetChildCount(); ++i) {
+    CollectForbiddenTests(group->GetChild(i), forbiddenTests);
+  }
+}
+
 void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSummary* summary)
 {
+  summary->total++;
+
+  if (test->GetMode() == TestMode::Skip) {
+    summary->skipped++;
+    TEST_LOG_PRINT(
+        LogColor::Yellow, "[SKIP] [{}] {}", CheckGroupName(group->GetName()), test->GetName()
+    );
+    return;
+  }
+
+  if (!WillRun(*test)) {
+    summary->skipped++;
+    return;
+  }
+
   this->isFailure = false;
   this->currentGroupPath = BuildGroupPath(group);
 
@@ -132,7 +193,6 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
     summary->slowestTestName = test->GetName();
   }
 
-  summary->total++;
   if (this->isFailure) {
     summary->failed++;
     TEST_LOG_PRINT(
@@ -165,14 +225,19 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
       LogColor::Yellow, "[%s] - Test Count: %zu", group->GetName(), group->GetTests().size()
   );
 #else
-  if (strcmp(group->GetName(), "ROOT")) {
+  if (strcmp(group->GetName(), "ROOT") && AnyTestInSubtree(group, WillPrint)) {
     TEST_LOG_PRINT(LogColor::Cyan, "[{}]", group->GetName());
   }
 #endif
 
-  this->BeginContext(group->GetName(), "(before_all)");
-  group->ExecuteBeforeAll();
-  EndContext();
+  // Skipped tests don't need the group's fixtures set up.
+  const bool runsAnyTest = AnyTestInSubtree(group, WillRun);
+
+  if (runsAnyTest) {
+    this->BeginContext(group->GetName(), "(before_all)");
+    group->ExecuteBeforeAll();
+    EndContext();
+  }
 
   auto groupStartTime = std::chrono::high_resolution_clock::now();
 
@@ -183,21 +248,25 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
 
   for (size_t i = 0; i < group->GetChildCount(); ++i) {
     this->RunGroup(group->GetChild(i), summary);
-    std::printf("\n");
+    if (AnyTestInSubtree(group->GetChild(i), WillPrint)) {
+      std::printf("\n");
+    }
   }
 
   auto groupEndTime = std::chrono::high_resolution_clock::now();
   TestDuration groupElapsedTime = groupEndTime - groupStartTime;
 
-  if (strcmp(group->GetName(), "ROOT") != 0) {
+  if (strcmp(group->GetName(), "ROOT") != 0 && runsAnyTest) {
     TEST_LOG_PRINT(
         LogColor::Yellow, "[{}] group total: {:.4f}ms", group->GetName(), groupElapsedTime.count()
     );
   }
 
-  this->BeginContext(group->GetName(), "(after_all)");
-  group->ExecuteAfterAll();
-  EndContext();
+  if (runsAnyTest) {
+    this->BeginContext(group->GetName(), "(after_all)");
+    group->ExecuteAfterAll();
+    EndContext();
+  }
 
   return summary;
 }
@@ -211,6 +280,18 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   }
 
   TestRunSummary summary;
+
+  std::vector<std::string> forbiddenTests;
+  CollectForbiddenTests(registry->GetRootGroup(), &forbiddenTests);
+  if (!forbiddenTests.empty()) {
+    TEST_LOG_ERROR("{} forbidden test(s) found, not running any tests:", forbiddenTests.size());
+    for (const std::string& forbiddenTest : forbiddenTests) {
+      TEST_LOG_PRINT(LogColor::Red, "  {}", forbiddenTest);
+    }
+    // Counted as failures so entry points that exit on summary.failed fail the run.
+    summary.failed = static_cast<int>(forbiddenTests.size());
+    return summary;
+  }
 
   auto suiteStartTime = std::chrono::high_resolution_clock::now();
 
@@ -237,12 +318,25 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   std::printf("────────────────────────────────────────────────");
 
   std::printf(
-      "\nSummary: %s%d total%s, %s%d passed%s, %s%d failed\n\n%s", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+      "\nSummary: %s%d total%s, %s%d passed%s, %s%d failed%s", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
       summary.total, Ansi::ANSI_RESET, Ansi::ANSI_COLOR_BRIGHT_GREEN, summary.passed,
       Ansi::ANSI_RESET, Ansi::ANSI_COLOR_BRIGHT_RED, summary.failed, Ansi::ANSI_RESET
   );
+  if (summary.skipped > 0) {
+    std::printf(
+        ", %s%d skipped%s", Ansi::ANSI_COLOR_BRIGHT_YELLOW, summary.skipped, Ansi::ANSI_RESET
+    );
+  }
+  std::printf("\n\n");
 
-  if (summary.total > 0) {
+  if (TestModeRegistry::GetInstance().HasFocusedTests()) {
+    std::printf(
+        "%sFocused run: only *_ONLY tests were run%s\n",
+        Ansi::ANSI_COLOR_BRIGHT_YELLOW, Ansi::ANSI_RESET
+    );
+  }
+
+  if (summary.passed + summary.failed > 0) {
     std::printf(
         "%sSlowest: [%s] %s (%.4fms)\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
         summary.slowestTestGroupName.c_str(), summary.slowestTestName.c_str(),

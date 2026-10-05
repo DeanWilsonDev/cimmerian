@@ -10,6 +10,7 @@
 #include <thread>
 #include "cimmerian/snapshot/snapshot-run-mode.hpp"
 #include "cimmerian/test-log.hpp"
+#include "cimmerian/test-mode.hpp"
 
 namespace Cimmerian::Visual {
 
@@ -83,6 +84,23 @@ std::string HtmlEscape(const std::string& text)
     }
   }
   return out;
+}
+
+void CollectForbiddenTests(const VisualTestGroup* group, std::vector<std::string>* forbiddenTests)
+{
+  const TestModeRegistry& modes = TestModeRegistry::GetInstance();
+  for (const VisualTestCase& test : group->GetTests()) {
+    if (modes.IsForbidden(test.GetMode())) {
+      const std::string groupPath = BuildVisualGroupPath(group);
+      forbiddenTests->push_back(
+          (groupPath.empty() ? "" : groupPath + " > ") + test.GetName() + "  (" +
+          ForbiddenModeReason(test.GetMode()) + ")"
+      );
+    }
+  }
+  for (std::size_t i = 0; i < group->GetChildCount(); ++i) {
+    CollectForbiddenTests(group->GetChild(i), forbiddenTests);
+  }
 }
 
 } // namespace
@@ -258,6 +276,19 @@ void VisualTestRunner::RunOne(const VisualTestGroup* group, const VisualTestCase
     return;
   }
 
+  if (test->GetMode() == TestMode::Skip) {
+    summary->total++;
+    summary->skipped++;
+    TEST_LOG_PRINT(Log::LogColor::Yellow, "[SKIP] [{}] {}", groupPath, test->GetName());
+    return;
+  }
+
+  if (!TestModeRegistry::GetInstance().ShouldRun(test->GetMode())) {
+    summary->total++;
+    summary->skipped++;
+    return;
+  }
+
   this->currentGroupPath = groupPath;
   this->currentTestName = test->GetName();
   this->currentWindowHandle = group->GetWindowHandle();
@@ -332,12 +363,30 @@ VisualTestRunSummary VisualTestRunner::RunAll(const VisualTestRegistry* registry
   std::printf("\n");
   std::printf("── Visual Regression ──────────────────────────\n");
 
+  std::vector<std::string> forbiddenTests;
+  CollectForbiddenTests(registry->GetRootGroup(), &forbiddenTests);
+  if (!forbiddenTests.empty()) {
+    TEST_LOG_ERROR(
+        "{} forbidden visual test(s) found, not running any visual tests:", forbiddenTests.size()
+    );
+    for (const std::string& forbiddenTest : forbiddenTests) {
+      TEST_LOG_PRINT(Log::LogColor::Red, "  {}", forbiddenTest);
+    }
+    // Counted as failures so entry points that exit on summary.failed fail the run.
+    summary.failed = static_cast<int>(forbiddenTests.size());
+    return summary;
+  }
+
   this->RunGroup(registry->GetRootGroup(), &summary);
 
   std::printf(
-      "\nVisual Summary: %d total, %d passed, %d failed, %d updated, %d missing\n", summary.total,
+      "\nVisual Summary: %d total, %d passed, %d failed, %d updated, %d missing", summary.total,
       summary.passed, summary.failed, summary.updatedGoldens, summary.missingGoldens
   );
+  if (summary.skipped > 0) {
+    std::printf(", %d skipped", summary.skipped);
+  }
+  std::printf("\n");
   std::printf("────────────────────────────────────────────────\n");
 
   if (this->mode == VisualRunMode::Review) {

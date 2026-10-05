@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include "test-case.hpp"
 #include "test-group.hpp"
+#include "test-mode.hpp"
 
 namespace Cimmerian {
 
@@ -30,7 +31,8 @@ public:
       const char* testName,
       TestCase::TestCaseFn fn,
       void* user = nullptr,
-      TestCase::TestTeardownFn teardownFn = nullptr
+      TestCase::TestTeardownFn teardownFn = nullptr,
+      TestMode mode = TestMode::Normal
   );
 
   void SetBeforeAll(

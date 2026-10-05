@@ -68,7 +68,12 @@ public:
 
   VisualTestGroup* GetChildGroup(VisualTestGroup* parent, const char* groupName, void* windowHandle);
 
-  void RegisterTest(VisualTestGroup* group, const char* testName, VisualTestCase::VisualTestCaseFn fn);
+  void RegisterTest(
+      VisualTestGroup* group,
+      const char* testName,
+      VisualTestCase::VisualTestCaseFn fn,
+      TestMode mode = TestMode::Normal
+  );
 
 private:
   std::unique_ptr<VisualTestGroup> root;

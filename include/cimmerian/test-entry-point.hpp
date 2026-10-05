@@ -2,6 +2,7 @@
 
 #include "cimmerian/test-runner.hpp"
 #include "cimmerian/test-debug.hpp"
+#include "cimmerian/test-mode.hpp"
 #ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
 #include "cimmerian/snapshot/snapshot-run-mode.hpp"
 #endif
@@ -9,6 +10,7 @@
 int main(int argc, char* argv[])
 {
   Cimmerian::CheckDebug(argc, argv);
+  Cimmerian::TestModeRegistry::GetInstance().ParseArgs(argc, argv);
 #ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
   Cimmerian::Snapshot::SnapshotRunModeRegistry::GetInstance().ParseArgs(argc, argv);
 #endif

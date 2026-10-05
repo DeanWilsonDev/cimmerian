@@ -63,10 +63,12 @@ std::string BuildVisualGroupPath(const VisualTestGroup* group)
 void VisualTestRegistry::RegisterTest(
     VisualTestGroup* group,
     const char* testName,
-    VisualTestCase::VisualTestCaseFn fn
+    VisualTestCase::VisualTestCaseFn fn,
+    TestMode mode
 )
 {
-  group->GetTests().emplace_back(testName, std::move(fn));
+  group->GetTests().emplace_back(testName, std::move(fn), nullptr, mode);
+  TestModeRegistry::GetInstance().RecordRegistration(mode);
 }
 
 } // namespace Cimmerian::Visual

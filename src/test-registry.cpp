@@ -75,7 +75,8 @@ void TestRegistry::RegisterTest(
     const char* testName,
     TestCase::TestCaseFn fn,
     void* user,
-    TestCase::TestTeardownFn teardownFn
+    TestCase::TestTeardownFn teardownFn,
+    TestMode mode
 )
 {
   if (!group) {
@@ -83,8 +84,9 @@ void TestRegistry::RegisterTest(
     std::abort();
   }
 
-  TestCase test(testName, fn, user, teardownFn);
+  TestCase test(testName, fn, user, teardownFn, mode);
   group->GetTests().push_back(std::move(test));
+  TestModeRegistry::GetInstance().RecordRegistration(mode);
 
 #ifdef ENABLE_DEBUG
   std::fprintf(

@@ -409,3 +409,126 @@ DESCRIBE("Custom Type Equality", {
     ASSERT_FAILS(ASSERT_FAILS(ASSERT_TRUE(true)));
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _SKIP variants — skipped tests and groups never run, nor do their hooks
+// ─────────────────────────────────────────────────────────────────────────────
+// _ONLY can't be exercised here end to end: one _ONLY anywhere in this binary
+// would focus the whole self-test run. Mode resolution is covered directly
+// below instead.
+
+static int skipGroupBeforeEachCallCount = 0;
+static int skippedGroupBeforeAllCallCount = 0;
+static int skippedGroupBeforeEachCallCount = 0;
+
+static void FailingTestFunction(void*)
+{
+  ASSERT_TRUE(false);
+}
+
+DESCRIBE("Skipping", {
+  DESCRIBE("Skipped Tests", {
+    BEFORE_EACH({
+      skipGroupBeforeEachCallCount++;
+    });
+
+    TEST_SKIP("TEST_SKIP never runs its body", {
+      ASSERT_TRUE(false);
+    });
+
+    IT_SKIP("IT_SKIP never runs its body", {
+      ASSERT_TRUE(false);
+    });
+
+    TEST_FN_SKIP("TEST_FN_SKIP never runs its function", FailingTestFunction);
+    IT_FN_SKIP("IT_FN_SKIP never runs its function", FailingTestFunction);
+
+    TEST("BEFORE_EACH only fires for tests that run", {
+      ASSERT_EQUAL(skipGroupBeforeEachCallCount, 1);
+    });
+  });
+
+  DESCRIBE_SKIP("Skipped Group", {
+    BEFORE_ALL({
+      skippedGroupBeforeAllCallCount++;
+    });
+
+    BEFORE_EACH({
+      skippedGroupBeforeEachCallCount++;
+    });
+
+    TEST("tests inside DESCRIBE_SKIP never run", {
+      ASSERT_TRUE(false);
+    });
+
+    DESCRIBE("Nested Group", {
+      TEST("nested groups inherit the skip", {
+        ASSERT_TRUE(false);
+      });
+    });
+
+    DESCRIBE_ONLY("Focused Nested Group", {
+      TEST_ONLY("skip wins over a nested _ONLY", {
+        ASSERT_TRUE(false);
+      });
+    });
+  });
+
+  DESCRIBE("After Skipped Group", {
+    TEST("a skipped group's hooks never fire", {
+      ASSERT_EQUAL(skippedGroupBeforeAllCallCount, 0);
+      ASSERT_EQUAL(skippedGroupBeforeEachCallCount, 0);
+    });
+
+    TEST("an _ONLY inside a skipped group doesn't focus the run", {
+      ASSERT_FALSE(Cimmerian::TestModeRegistry::GetInstance().HasFocusedTests());
+    });
+  });
+});
+
+DESCRIBE("Test Mode Resolution", {
+  using Cimmerian::CombineTestModes;
+  using Cimmerian::IsForbiddenMode;
+  using Cimmerian::ShouldRunTest;
+  using Cimmerian::TestMode;
+
+  TEST("a test inherits its enclosing DESCRIBE's mode", {
+    ASSERT_TRUE(CombineTestModes(TestMode::Skip, TestMode::Normal) == TestMode::Skip);
+    ASSERT_TRUE(CombineTestModes(TestMode::Only, TestMode::Normal) == TestMode::Only);
+    ASSERT_TRUE(CombineTestModes(TestMode::Normal, TestMode::Normal) == TestMode::Normal);
+  });
+
+  TEST("Skip wins over Only at either level", {
+    ASSERT_TRUE(CombineTestModes(TestMode::Skip, TestMode::Only) == TestMode::Skip);
+    ASSERT_TRUE(CombineTestModes(TestMode::Only, TestMode::Skip) == TestMode::Skip);
+  });
+
+  TEST("without focus, everything but Skip runs", {
+    ASSERT_TRUE(ShouldRunTest(TestMode::Normal, false));
+    ASSERT_TRUE(ShouldRunTest(TestMode::Only, false));
+    ASSERT_FALSE(ShouldRunTest(TestMode::Skip, false));
+  });
+
+  TEST("with focus, only Only runs", {
+    ASSERT_TRUE(ShouldRunTest(TestMode::Only, true));
+    ASSERT_FALSE(ShouldRunTest(TestMode::Normal, true));
+    ASSERT_FALSE(ShouldRunTest(TestMode::Skip, true));
+  });
+
+  TEST("--forbid-only forbids Only and nothing else", {
+    ASSERT_TRUE(IsForbiddenMode(TestMode::Only, true, false));
+    ASSERT_FALSE(IsForbiddenMode(TestMode::Skip, true, false));
+    ASSERT_FALSE(IsForbiddenMode(TestMode::Normal, true, false));
+  });
+
+  TEST("--forbid-skip forbids Skip and nothing else", {
+    ASSERT_TRUE(IsForbiddenMode(TestMode::Skip, false, true));
+    ASSERT_FALSE(IsForbiddenMode(TestMode::Only, false, true));
+    ASSERT_FALSE(IsForbiddenMode(TestMode::Normal, false, true));
+  });
+
+  TEST("nothing is forbidden without either flag", {
+    ASSERT_FALSE(IsForbiddenMode(TestMode::Only, false, false));
+    ASSERT_FALSE(IsForbiddenMode(TestMode::Skip, false, false));
+  });
+});
