@@ -4,7 +4,7 @@
 <img src="assets/docs/cimmerian-logo.svg" width="500"/>
 </p>
 
-A modern C++20 unit testing framework. BDD-style test authoring, visual diff output on failure, and built-in performance timing — with zero external dependencies.
+A modern C++26 unit testing framework. BDD-style test authoring, visual diff output on failure, and built-in performance timing — with zero external dependencies.
 
 ```
 [Example Tests]
@@ -27,9 +27,10 @@ Slowest: [Math] Fibonacci  (0.0034ms)
 
 ## Requirements
 
-- C++20 or later
-- CMake 3.20+
-- A compiler with `std::format` support (GCC 13+, Clang 16+, MSVC 19.29+)
+- C++26
+- CMake 3.30+
+- GCC 14+, Clang 18+, or a recent AppleClang
+- On Windows, clang-cl from Clang 18+; MSVC's cl.exe isn't supported
 
 ---
 
@@ -51,7 +52,7 @@ add_executable(my_tests
 )
 
 target_link_libraries(my_tests PRIVATE cimmerian)
-target_compile_features(my_tests PUBLIC cxx_std_20)
+target_compile_features(my_tests PUBLIC cxx_std_26)
 ```
 
 Install locally as library:

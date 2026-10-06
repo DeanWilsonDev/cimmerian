@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.30)
 
 if(TARGET cimmerian)
   return()
@@ -8,6 +8,11 @@ project(
   cimmerian
   VERSION 1.0.0
   LANGUAGES CXX)
+
+if((CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+   OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 18))
+  message(FATAL_ERROR "Cimmerian needs GCC 14 or later or Clang 18 or later; found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,7 +50,7 @@ target_include_directories(
   cimmerian PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                    $<INSTALL_INTERFACE:include>)
 
-target_compile_features(cimmerian PUBLIC cxx_std_20)
+target_compile_features(cimmerian PUBLIC cxx_std_26)
 set_target_properties(cimmerian PROPERTIES C_EXTENSIONS OFF)
 
 # -------------------------
@@ -313,7 +318,7 @@ if(CIMMERIAN_BUILD_TESTS)
   endif()
 
   # tests are C++
-  target_compile_features(test_cimmerian PRIVATE cxx_std_20)
+  target_compile_features(test_cimmerian PRIVATE cxx_std_26)
 
   if(MSVC)
     target_compile_options(test_cimmerian PRIVATE /W4 /EHsc)

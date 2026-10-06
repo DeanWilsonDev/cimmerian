@@ -1,8 +1,8 @@
 ---
-description: Write, run, and extend tests against the Cimmerian C++20 testing framework (unit tests, string/inline/hash snapshots, visual regression tests). Use whenever a project depends on Cimmerian and you need to author test files, wire up test-main.cpp, or add assertions.
+description: Write, run, and extend tests against the Cimmerian C++26 testing framework (unit tests, string/inline/hash snapshots, visual regression tests). Use whenever a project depends on Cimmerian and you need to author test files, wire up test-main.cpp, or add assertions.
 ---
 
-Cimmerian is a header-driven, zero-dependency C++20 unit testing framework
+Cimmerian is a header-driven, zero-dependency C++26 unit testing framework
 (BDD-style authoring, visual diff on failure, built-in timing), extended with
 snapshot testing and visual/UI regression testing. This skill summarizes the
 consumer-facing API; the full design docs live in this repo's `docs/`
@@ -11,8 +11,8 @@ if you're vendoring Cimmerian and need more depth than what's below.
 
 ## Requirements
 
-C++20, CMake 3.20+, a compiler with `std::format` (GCC 13+, Clang 16+, MSVC
-19.29+).
+C++26, CMake 3.30+, GCC 14+, Clang 18+, or a recent AppleClang. On Windows,
+use clang-cl from Clang 18+; MSVC's cl.exe isn't supported.
 
 ## Wiring it into a project
 
@@ -24,7 +24,7 @@ add_executable(my_tests
   test/test-main.cpp
 )
 target_link_libraries(my_tests PRIVATE cimmerian)
-target_compile_features(my_tests PUBLIC cxx_std_20)
+target_compile_features(my_tests PUBLIC cxx_std_26)
 ```
 
 ```cpp
