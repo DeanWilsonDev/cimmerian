@@ -78,6 +78,12 @@ Including `cimmerian/snapshot.hpp` or `cimmerian/visual.hpp` without enabling
 the matching option fails fast at compile time with a `#error` pointing at
 the flag to set, rather than an obscure link error.
 
+Building Cimmerian on its own turns snapshot testing on, so its own snapshot
+tests run. Visual testing stays off there too, because its backend needs a
+display and platform packages (libXtst on Linux). Pass
+`-DCIMMERIAN_ENABLE_VISUAL_TESTING=ON` to build and run Cimmerian's visual
+self-tests.
+
 ---
 
 ## Quick Start

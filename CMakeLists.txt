@@ -32,13 +32,16 @@ endif()
 # own source files (and, for visual, a platform capture/injection backend
 # with its own system dependencies) that most consumers don't need. Each is
 # independent - enabling one does not require the other. When cimmerian is
-# the root project (i.e. building its own tests), default both ON so
-# `cmake -B build && cmake --build build` exercises the full test suite
-# without extra flags.
+# the root project (i.e. building its own tests), snapshot testing defaults
+# ON so `cmake -B build && cmake --build build` exercises its self-tests
+# without extra flags. Visual testing stays OFF even then: its backend needs
+# a display and platform packages (libXtst on Linux, Objective-C++ on
+# macOS), so its self-tests are opt-in with
+# -DCIMMERIAN_ENABLE_VISUAL_TESTING=ON.
 option(CIMMERIAN_ENABLE_SNAPSHOT_TESTING "Compile in snapshot testing support"
        ${CIMMERIAN_IS_ROOT_PROJECT})
 option(CIMMERIAN_ENABLE_VISUAL_TESTING
-       "Compile in visual regression testing support" ${CIMMERIAN_IS_ROOT_PROJECT})
+       "Compile in visual regression testing support" OFF)
 
 # -------------------------
 # Library target
