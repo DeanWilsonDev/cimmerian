@@ -29,8 +29,8 @@ Slowest: [Math] Fibonacci  (0.0034ms)
 
 - C++26
 - CMake 3.30+
-- GCC 14+, Clang 18+, or a recent AppleClang
-- On Windows, clang-cl from Clang 18+; MSVC's cl.exe isn't supported
+- GCC 14+, Clang 19+, or a recent AppleClang
+- On Windows, clang-cl from Clang 19+; MSVC's cl.exe isn't supported
 
 ---
 

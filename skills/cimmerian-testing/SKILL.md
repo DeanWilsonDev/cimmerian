@@ -11,8 +11,8 @@ if you're vendoring Cimmerian and need more depth than what's below.
 
 ## Requirements
 
-C++26, CMake 3.30+, GCC 14+, Clang 18+, or a recent AppleClang. On Windows,
-use clang-cl from Clang 18+; MSVC's cl.exe isn't supported.
+C++26, CMake 3.30+, GCC 14+, Clang 19+, or a recent AppleClang. On Windows,
+use clang-cl from Clang 19+; MSVC's cl.exe isn't supported.
 
 ## Wiring it into a project
 
