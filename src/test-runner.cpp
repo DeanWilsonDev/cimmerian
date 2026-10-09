@@ -16,7 +16,6 @@
 #include <cstdarg>
 #include <cstring>
 #include <cassert>
-#include <sstream>
 
 namespace Cimmerian {
 
@@ -53,30 +52,25 @@ static std::string ExtractBasename(const std::string& filePath)
 
 static void PrintFailureBlock(const TestFailRecord& failure)
 {
-  constexpr const char* BLOCK_INDENT   = "      ";
-  constexpr const char* CONTENT_INDENT = "        ";
+  constexpr const char* BLOCK_INDENT  = "      ";
+  constexpr const char* DETAIL_INDENT = "            ";
 
   const std::string filename = ExtractBasename(failure.file);
 
-  std::printf("\n");
+  std::printf(
+      "\n%s%s%s%s\n", BLOCK_INDENT, Ansi::ANSI_COLOR_BRIGHT_YELLOW, failure.message.c_str(),
+      Ansi::ANSI_RESET
+  );
 
-  // Split message into lines; first line is the reason header, rest is the diff.
-  std::istringstream messageStream(failure.message);
-  std::string messageLine;
-  bool isReasonLine = true;
-
-  while (std::getline(messageStream, messageLine)) {
-    if (messageLine.empty()) continue;
-
-    if (isReasonLine) {
-      std::printf(
-          "%s%s%s%s\n\n", BLOCK_INDENT,
-          Ansi::ANSI_COLOR_BRIGHT_YELLOW, messageLine.c_str(), Ansi::ANSI_RESET
-      );
-      isReasonLine = false;
-    }
-    else {
-      std::printf("%s%s\n", CONTENT_INDENT, messageLine.c_str());
+  if (!failure.details.empty()) {
+    std::printf("\n");
+    for (const std::string& detailLine : failure.details) {
+      if (detailLine.empty()) {
+        std::printf("\n");
+      }
+      else {
+        std::printf("%s%s\n", DETAIL_INDENT, detailLine.c_str());
+      }
     }
   }
 
@@ -87,19 +81,22 @@ static void PrintFailureBlock(const TestFailRecord& failure)
   );
 }
 
-void TestRunner::OnTestFail(const char* file, int line, const char* msg)
+void TestRunner::OnTestFail(const TestFailRecord& failure)
 {
   if (!this->inTest) {
     std::fprintf(
         stderr, "%s" TAG_ERROR "%s:%d: test failure outside of running test: %s\n",
-        Ansi::ANSI_COLOR_BRIGHT_RED, file, line, msg
+        Ansi::ANSI_COLOR_BRIGHT_RED, failure.file.c_str(), failure.line, failure.message.c_str()
     );
+    for (const std::string& detailLine : failure.details) {
+      std::fprintf(stderr, "    %s\n", detailLine.c_str());
+    }
     return;
   }
 
   this->isFailure = true;
   this->totalFailures++;
-  this->pendingFailures.push_back({file, line, msg});
+  this->pendingFailures.push_back(failure);
 }
 
 template <typename TPredicate>

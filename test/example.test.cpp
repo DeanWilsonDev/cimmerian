@@ -229,6 +229,53 @@ DESCRIBE("std::array Equality", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Failure records — what a handler receives
+// ─────────────────────────────────────────────────────────────────────────────
+
+DESCRIBE("Failure Records", {
+  TEST("a diffing assertion carries its diff as detail lines, not in the message", {
+    std::vector<int> actual   = {1, 2, 3};
+    std::vector<int> expected = {1, 2};
+    auto failure = CAPTURE_FAILURE(ASSERT_EQUAL(actual, expected));
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "Containers differ:");
+    REQUIRE_EQUAL(failure->details.size(), std::size_t {2});
+    ASSERT_EQUAL(Cimmerian::Ansi::AnsiFormatter::StripCodes(failure->details[0]), "Expected  [1, 2]");
+    ASSERT_EQUAL(Cimmerian::Ansi::AnsiFormatter::StripCodes(failure->details[1]), "Received  [1, 2, 3]");
+  });
+
+  TEST("a one-line failure has no detail lines", {
+    auto failure = CAPTURE_FAILURE(ASSERT_TRUE(1 == 2));
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "ASSERT_TRUE failed: 1 == 2");
+    ASSERT_TRUE(failure->details.empty());
+  });
+
+  TEST("a preformatted multi-line message splits into a message and detail lines", {
+    auto failure = CAPTURE_FAILURE(
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(
+        __FILE__, __LINE__, "lint is not clean:\n  - first\n\n  - second\n"
+      )
+    );
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "lint is not clean:");
+    const std::vector<std::string> expectedDetails = {"  - first", "", "  - second"};
+    ASSERT_EQUAL(failure->details, expectedDetails);
+  });
+
+  TEST("CAPTURE_FAILURE_MESSAGE joins the message and detail lines", {
+    std::vector<int> actual   = {1, 2, 3};
+    std::vector<int> expected = {1, 2};
+    auto message = CAPTURE_FAILURE_MESSAGE(ASSERT_EQUAL(actual, expected));
+    REQUIRE_TRUE(message.has_value());
+    ASSERT_EQUAL(
+      Cimmerian::Ansi::AnsiFormatter::StripCodes(*message),
+      "Containers differ:\nExpected  [1, 2]\nReceived  [1, 2, 3]"
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ASSERT_NULL / ASSERT_NOT_NULL
 // ─────────────────────────────────────────────────────────────────────────────
 

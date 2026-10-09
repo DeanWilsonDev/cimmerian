@@ -217,6 +217,9 @@ inline Cimmerian::TestMode _test_scope_mode = Cimmerian::TestMode::Normal;
   } while (0)
 
 
+#define CAPTURE_FAILURE(expression)                                                                \
+  Cimmerian::TestRunner::GetActive()->CaptureFailure([&]() { expression; })
+
 #define CAPTURE_FAILURE_MESSAGE(expression)                                                        \
   Cimmerian::TestRunner::GetActive()->CaptureFailureMessage([&]() { expression; })
 

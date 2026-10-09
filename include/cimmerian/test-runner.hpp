@@ -5,6 +5,7 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Cimmerian {
@@ -36,18 +37,12 @@ struct TestRunSummary {
   int inlineRewriteCount = 0;
 };
 
-struct TestFailRecord {
-  std::string file;
-  int line;
-  std::string message;
-};
-
 class TestRunner : public ITestFailHandler {
 public:
   TestRunner();
   ~TestRunner() = default;
 
-  void OnTestFail(const char* file, int line, const char* msg) override;
+  void OnTestFail(const TestFailRecord& failure) override;
 
   void RunOne(const TestGroup* group, const TestCase* test, TestRunSummary* summary);
   TestRunSummary* RunGroup(const TestGroup* group, TestRunSummary* summary);
@@ -68,52 +63,52 @@ public:
   // extension needing its own registry of the active runner.
   static TestRunner* GetActive() { return activeInstance; }
 
-  // Runs callable and returns true if it triggered at least one assertion failure.
-  // On success the captured failures are removed, leaving the calling test unaffected.
+  // Runs callable and returns the first failure it triggered, or std::nullopt
+  // if it completed without any assertion failure. Captured failures are
+  // removed so the calling test is unaffected.
+  template <typename TCallable>
+  std::optional<TestFailRecord> CaptureFailure(TCallable&& callable)
+  {
+    const bool        priorIsFailure     = this->isFailure;
+    const int         priorTotalFailures = this->totalFailures;
+    const std::size_t priorPendingCount  = this->pendingFailures.size();
 
-  // Runs callable and returns the failure message if one was triggered, or
-  // std::nullopt if the callable completed without any assertion failure.
-  // On a captured failure the record is removed so the calling test is unaffected.
+    callable();
+
+    if (this->pendingFailures.size() == priorPendingCount) {
+      return std::nullopt;
+    }
+
+    TestFailRecord capturedFailure = std::move(this->pendingFailures[priorPendingCount]);
+    this->pendingFailures.resize(priorPendingCount);
+    this->isFailure     = priorIsFailure;
+    this->totalFailures = priorTotalFailures;
+    return capturedFailure;
+  }
+
+  // As CaptureFailure, with the failure's message and detail lines joined by
+  // newlines.
   template <typename TCallable>
   std::optional<std::string> CaptureFailureMessage(TCallable&& callable)
   {
-    const bool        priorIsFailure     = this->isFailure;
-    const int         priorTotalFailures = this->totalFailures;
-    const std::size_t priorPendingCount  = this->pendingFailures.size();
-
-    callable();
-
-    const bool newFailureOccurred = this->pendingFailures.size() > priorPendingCount;
-
-    if (newFailureOccurred) {
-      std::string capturedMessage = this->pendingFailures[priorPendingCount].message;
-      this->pendingFailures.resize(priorPendingCount);
-      this->isFailure     = priorIsFailure;
-      this->totalFailures = priorTotalFailures;
-      return capturedMessage;
+    std::optional<TestFailRecord> capturedFailure = this->CaptureFailure(callable);
+    if (!capturedFailure) {
+      return std::nullopt;
     }
 
-    return std::nullopt;
+    std::string capturedMessage = capturedFailure->message;
+    for (const std::string& detailLine : capturedFailure->details) {
+      capturedMessage += "\n" + detailLine;
+    }
+    return capturedMessage;
   }
 
+  // Runs callable and returns true if it triggered at least one assertion
+  // failure, removing the failures so the calling test is unaffected.
   template <typename TCallable>
   bool ExpectFailure(TCallable&& callable)
   {
-    const bool        priorIsFailure     = this->isFailure;
-    const int         priorTotalFailures = this->totalFailures;
-    const std::size_t priorPendingCount  = this->pendingFailures.size();
-
-    callable();
-
-    const bool newFailureOccurred = this->pendingFailures.size() > priorPendingCount;
-
-    if (newFailureOccurred) {
-      this->pendingFailures.resize(priorPendingCount);
-      this->isFailure     = priorIsFailure;
-      this->totalFailures = priorTotalFailures;
-    }
-
-    return newFailureOccurred;
+    return this->CaptureFailure(callable).has_value();
   }
 
 

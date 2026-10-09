@@ -1,9 +1,9 @@
 #pragma once
 
 #include <format>
-#include <iostream>
 #include <iterator>
 #include <string>
+#include <vector>
 #include "cimmerian/test-assertions.hpp"
 #include "cimmerian/test-runner.hpp"
 #include <cstddef>
@@ -21,6 +21,22 @@ inline std::string CurrentScopePath()
 {
   Cimmerian::TestRunner* active = Cimmerian::TestRunner::GetActive();
   return active ? active->GetCurrentGroupPath() : std::string();
+}
+
+// A mismatched snapshot's diff, followed by how to accept the new value. A
+// multi-line snapshot's diff lines carry its newlines, so they're split up.
+inline std::vector<std::string>
+SnapshotMismatchDetails(const std::string& storedValue, const std::string& serializedValue)
+{
+  std::vector<std::string> details;
+  for (const std::string& diffLine :
+       Cimmerian::Assertions::FormatStringDiff(storedValue, serializedValue)) {
+    std::vector<std::string> lines = Cimmerian::SplitLines(diffLine);
+    details.insert(details.end(), lines.begin(), lines.end());
+  }
+  details.emplace_back();
+  details.emplace_back("Run with --update-snapshots to accept the new value.");
+  return details;
 }
 
 inline void AssertStringSnapshotImpl(
@@ -55,9 +71,10 @@ inline void AssertStringSnapshotImpl(
 
   accumulator.RecordFailed();
   const std::string keyString = SnapshotKeyToString(key);
-  Cimmerian::Assertions::fail(file, line, ("SNAPSHOT MISMATCH: \"" + keyString + "\"").c_str());
-  std::cerr << Cimmerian::Assertions::FormatStringDiff(*existing, serializedValue) << "\n";
-  std::cerr << "Run with --update-snapshots to accept the new value.\n";
+  Cimmerian::Assertions::fail(
+      file, line, "SNAPSHOT MISMATCH: \"" + keyString + "\"",
+      SnapshotMismatchDetails(*existing, serializedValue)
+  );
 }
 
 inline void AssertInlineSnapshotImpl(
@@ -90,9 +107,10 @@ inline void AssertInlineSnapshotImpl(
   }
 
   accumulator.RecordFailed();
-  Cimmerian::Assertions::fail(file, line, "INLINE SNAPSHOT MISMATCH:");
-  std::cerr << Cimmerian::Assertions::FormatStringDiff(currentSnapshot, serializedValue) << "\n";
-  std::cerr << "Run with --update-snapshots to accept the new value.\n";
+  Cimmerian::Assertions::fail(
+      file, line,
+      "INLINE SNAPSHOT MISMATCH:", SnapshotMismatchDetails(currentSnapshot, serializedValue)
+  );
 }
 
 using HashFn = std::function<std::string(const void* data, std::size_t size)>;
@@ -133,7 +151,7 @@ inline void AssertHashSnapshotImpl(
   accumulator.RecordFailed();
   const std::string keyString = SnapshotKeyToString(key);
   Cimmerian::Assertions::fail(
-      file, line, ("HASH SNAPSHOT MISMATCH: \"" + keyString + "\" (hash changed)").c_str()
+      file, line, "HASH SNAPSHOT MISMATCH: \"" + keyString + "\" (hash changed)"
   );
 }
 
