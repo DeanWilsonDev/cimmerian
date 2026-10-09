@@ -3,6 +3,7 @@
 #include "i-test-fail-handler.hpp"
 #include <cstddef>
 #include <chrono>
+#include <exception>
 #include <optional>
 #include <string>
 #include <utility>
@@ -62,6 +63,36 @@ public:
   // macros, visual macros) reach the running test's context without every
   // extension needing its own registry of the active runner.
   static TestRunner* GetActive() { return activeInstance; }
+
+  // Runs one stage of the current test - a hook or the body - reporting an
+  // exception that escapes it as a failure of that test, so one bad test can't
+  // end the run. Returns false if the stage threw. A memory fault isn't an
+  // exception and still takes the run down.
+  template <typename TStage>
+  bool RunContained(const char* stageName, TStage&& stage)
+  {
+    try {
+      stage();
+      return true;
+    }
+    catch (const std::exception& exception) {
+      this->OnTestFail(
+          {.file = "",
+           .line = 0,
+           .message = std::string(stageName) + " threw an exception:",
+           .details = SplitLines(exception.what())}
+      );
+    }
+    catch (...) {
+      this->OnTestFail(
+          {.file = "",
+           .line = 0,
+           .message = std::string(stageName) + " threw something that isn't a std::exception",
+           .details = {}}
+      );
+    }
+    return false;
+  }
 
   // Runs callable and returns the first failure it triggered, or std::nullopt
   // if it completed without any assertion failure. Captured failures are

@@ -330,6 +330,47 @@ DESCRIBE("Exception Assertions", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Contained test stages — an escaping exception fails the test, not the run
+// ─────────────────────────────────────────────────────────────────────────────
+
+DESCRIBE("Contained Test Stages", {
+  TEST("a stage that completes reports nothing", {
+    bool completed = false;
+    auto failure = CAPTURE_FAILURE(
+      completed = Cimmerian::TestRunner::GetActive()->RunContained("The test", [] {})
+    );
+    ASSERT_TRUE(completed);
+    ASSERT_FALSE(failure.has_value());
+  });
+
+  TEST("a std::exception escaping a stage becomes a failure carrying what()", {
+    bool completed = true;
+    auto failure = CAPTURE_FAILURE(
+      completed = Cimmerian::TestRunner::GetActive()->RunContained(
+        "The test", [] { throw std::runtime_error("first line\nsecond line"); }
+      )
+    );
+    ASSERT_FALSE(completed);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "The test threw an exception:");
+    const std::vector<std::string> expectedDetails = {"first line", "second line"};
+    ASSERT_EQUAL(failure->details, expectedDetails);
+    ASSERT_TRUE(failure->file.empty());
+  });
+
+  TEST("anything else escaping a stage becomes a failure too", {
+    bool completed = true;
+    auto failure = CAPTURE_FAILURE(
+      completed = Cimmerian::TestRunner::GetActive()->RunContained("BEFORE_EACH", [] { throw 42; })
+    );
+    ASSERT_FALSE(completed);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "BEFORE_EACH threw something that isn't a std::exception");
+    ASSERT_TRUE(failure->details.empty());
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // REQUIRE_TRUE / REQUIRE_EQUAL — halt-on-failure variants
 // ─────────────────────────────────────────────────────────────────────────────
 

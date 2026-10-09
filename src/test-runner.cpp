@@ -74,6 +74,10 @@ static void PrintFailureBlock(const TestFailRecord& failure)
     }
   }
 
+  if (failure.file.empty()) {
+    return;
+  }
+
   std::printf(
       "\n%s%sat %s:%d%s\n",
       BLOCK_INDENT, Ansi::ANSI_COLOR_BRIGHT_WHITE,
@@ -165,17 +169,21 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
   this->currentGroupPath = BuildGroupPath(group);
 
   this->BeginContext(group->GetName(), "(before_each)");
-  group->ExecuteBeforeEach();
+  const bool isSetUp = this->RunContained("BEFORE_EACH", [&] { group->ExecuteBeforeEach(); });
   EndContext();
 
+  // A BEFORE_EACH that threw left the test's fixture half set up, so its body
+  // doesn't run; AFTER_EACH still does, to tear down what was set up.
   this->BeginContext(group->GetName(), test->GetName());
   auto startTime = std::chrono::high_resolution_clock::now();
-  test->Run();
+  if (isSetUp) {
+    this->RunContained("The test", [&] { test->Run(); });
+  }
   auto endTime = std::chrono::high_resolution_clock::now();
   EndContext();
 
   this->BeginContext(group->GetName(), "(after_each)");
-  group->ExecuteAfterEach();
+  this->RunContained("AFTER_EACH", [&] { group->ExecuteAfterEach(); });
   EndContext();
 
   TestDuration elapsedTime = endTime - startTime;

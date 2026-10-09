@@ -111,6 +111,13 @@ strings, element-level for containers whose elements support
 one). Prefer `ASSERT_*` for independent checks in one test, `REQUIRE_*` when
 a later line would be meaningless/unsafe after an earlier check fails.
 
+An exception that escapes a test body, `BEFORE_EACH` or `AFTER_EACH` is
+reported as that test's failure, with `what()` as the detail, and the run
+carries on. A throwing `BEFORE_EACH` skips the test's body but still runs
+`AFTER_EACH`. A memory fault is a different matter: an out-of-bounds read
+still takes the whole run down, which is why a size check that guards an
+index should be a `REQUIRE_*`.
+
 ## Snapshot testing (`cimmerian/snapshot.hpp`)
 
 Three flavors, all `DESCRIBE`/`TEST`-compatible:
