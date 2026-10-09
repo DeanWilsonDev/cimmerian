@@ -93,6 +93,11 @@ display and platform packages (libXtst on Linux). Pass
 `-DCIMMERIAN_ENABLE_VISUAL_TESTING=ON` to build and run Cimmerian's visual
 self-tests.
 
+On a machine without X11, such as macOS,
+`tools/x11-capture-stability/run-in-docker.sh` builds the X11 backend in a
+Linux container and measures how its capture copes with a window that's
+repainted mid-capture.
+
 ---
 
 ## Quick Start
@@ -477,6 +482,8 @@ Cimmerian/
 │   └── visual.hpp, visual/             — visual regression testing (optional)
 ├── src/                                — implementation files
 ├── test/                               — Cimmerian's own self-tests
+├── snapshots/                          — golden images for the visual self-tests
+├── tools/x11-capture-stability/        — measures X11 capture against mid-capture repaints
 ├── skills/cimmerian-testing/           — agent skill describing the consumer API
 └── CMakeLists.txt
 ```

@@ -328,6 +328,24 @@ if(CIMMERIAN_BUILD_TESTS)
   else()
     target_compile_options(test_cimmerian PRIVATE -Wall -Wextra -Wpedantic)
   endif()
+
+  # x11_capture_stability measures how X11ScreenCapture's stability polling
+  # copes with a window repainted mid-capture. It's a measurement rather than
+  # a test, since its numbers depend on the machine, so test_cimmerian doesn't
+  # run it. See tools/x11-capture-stability/ for usage.
+  if(CIMMERIAN_ENABLE_VISUAL_TESTING
+     AND (CIMMERIAN_VISUAL_PLATFORM STREQUAL "X11"
+          OR CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-uinput"
+          OR CIMMERIAN_VISUAL_PLATFORM STREQUAL "Linux-auto"))
+    find_package(Threads REQUIRED)
+    add_executable(x11_capture_stability
+                   tools/x11-capture-stability/x11-capture-stability.cpp)
+    target_include_directories(x11_capture_stability PRIVATE ${X11_INCLUDE_DIR})
+    target_link_libraries(x11_capture_stability PRIVATE cimmerian ${X11_LIBRARIES}
+                                                        Threads::Threads)
+    target_compile_features(x11_capture_stability PRIVATE cxx_std_26)
+    target_compile_options(x11_capture_stability PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
 endif()
 
 # ------------------------
