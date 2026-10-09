@@ -7,20 +7,29 @@
 A modern C++26 unit testing framework. BDD-style test authoring, visual diff output on failure, and built-in performance timing — with zero external dependencies.
 
 ```
-[Example Tests]
 [Math]
-[PASS] [Math] Addition  (0.0005ms)
-[Math] group total: 0.0021ms
+[PASS] [Math] adds two numbers  (0.0003ms)
+[PASS] [Math] computes fibonacci  (0.0267ms)
+[Math] group total: 0.0623ms
 
 [Strings]
-[FAIL] [Strings] Compare greetings  (0.0003ms)
-  + "hello world"
-  - "hello wurld"
+[FAIL] [Strings] compares greetings  (0.0058ms)
 
-────────────────────────────────────────
-Summary: 4 total, 3 passed, 1 failed
-Slowest: [Math] Fibonacci  (0.0034ms)
-────────────────────────────────────────
+      Strings differ:
+
+            Expected  "hello world"
+            Received  "hello wurld"
+
+      at math.test.cpp:17
+
+[Strings] group total: 0.0146ms
+
+
+────────────────────────────────────────────────
+Summary: 3 total, 2 passed, 1 failed
+
+Slowest: [Math] computes fibonacci (0.0267ms)
+────────────────────────────────────────────────
 ```
 
 ---
@@ -171,9 +180,25 @@ IT("returns zero for empty input", {
 });
 ```
 
+A body can hold anything a function body can, including brace-initialisers
+with commas:
+
+```cpp
+IT("falls back to the default colour", {
+  Color fallback{1, 2, 3, 4};
+  ASSERT_EQUAL(resolve(nullptr), fallback);
+});
+```
+
+The same goes for `DESCRIBE` and the lifecycle hooks. The two-argument
+assertion macros are the exception: they have to split their arguments at
+the comma, so wrap a brace-initialised argument in parentheses:
+`ASSERT_EQUAL(values, (std::vector<int>{1, 2}))`.
+
 ### `IT_FN` / `TEST_FN` — register a function as a test
 
-Useful for table-driven or shared test logic.
+Useful for table-driven or shared test logic. Takes a function or a lambda,
+captures included.
 
 ```cpp
 void myTest(void*) {
@@ -181,6 +206,9 @@ void myTest(void*) {
 }
 
 IT_FN("my test", myTest);
+IT_FN("doubles its input", [factor = 2, input = 21](void*) {
+  ASSERT_EQUAL(input * factor, 42);
+});
 ```
 
 ### Lifecycle hooks
@@ -267,6 +295,9 @@ the Quick Start example.
 
 ## Assertions
 
+Every assertion takes the actual value first and the expected value second:
+`ASSERT_EQUAL(lexer.TextOf(token), "signal")`.
+
 ### Continuing assertions
 
 These report failure and continue running the rest of the test.
@@ -275,8 +306,13 @@ These report failure and continue running the rest of the test.
 |---|---|
 | `ASSERT_TRUE(cond)` | `cond` is false |
 | `ASSERT_FALSE(cond)` | `cond` is true |
-| `ASSERT_EQUAL(a, b)` | `a != b` |
-| `ASSERT_NOT_EQUAL(a, b)` | `a == b` |
+| `ASSERT_EQUAL(actual, expected)` | `actual != expected` |
+| `ASSERT_NOT_EQUAL(actual, expected)` | `actual == expected` |
+| `ASSERT_NEAR(actual, expected, epsilon)` | `actual` and `expected` differ by more than `epsilon` |
+| `ASSERT_NULL(ptr)` | `ptr` isn't null |
+| `ASSERT_NOT_NULL(ptr)` | `ptr` is null |
+| `ASSERT_THROWS(expression, ExceptionType)` | `expression` doesn't throw, or throws something other than `ExceptionType` |
+| `ASSERT_NO_THROW(expression)` | `expression` throws |
 
 ### Halting assertions
 
@@ -285,33 +321,118 @@ These report failure and immediately stop the current test via `return`.
 | Macro | Fails when |
 |---|---|
 | `REQUIRE_TRUE(cond)` | `cond` is false |
-| `REQUIRE_EQUAL(a, b)` | `a != b` |
+| `REQUIRE_EQUAL(actual, expected)` | `actual != expected` |
+
+Use these when a later line only makes sense if the check passed, such as a
+size check that guards an index. A continuing assertion would carry on and
+read out of bounds.
+
+### Testing failures
+
+For testing your own assertion helpers. A captured failure doesn't fail the
+surrounding test.
+
+| Macro | Does |
+|---|---|
+| `ASSERT_FAILS(expression)` | Fails if `expression` doesn't report a failure |
+| `CAPTURE_FAILURE(expression)` | Returns the first failure `expression` reported as a `std::optional<Cimmerian::TestFailRecord>` (`file`, `line`, `message`, `details`) |
+| `CAPTURE_FAILURE_MESSAGE(expression)` | The same failure as a `std::optional<std::string>`, with the message and detail lines joined by newlines |
 
 ---
 
-## Diff Output
+## Failure Output
 
-`ASSERT_EQUAL` produces a visual diff on failure. Differing elements are highlighted with bright colour and underline. Missing elements appear as `∅`. Extra elements appear with strikethrough.
+Each failure prints under its test's `[FAIL]` line as a block: a one-line
+reason, the detail lines, and the place it failed. A test that fails more
+than once gets one block per failure.
+
+```
+[FAIL] [Inventory] counts stock  (0.0041ms)
+
+      Containers differ:
+
+            Expected  [1, 2, 3, 4]
+            Received  [1, 2, 9, ∅]
+
+      at inventory.test.cpp:9
+```
+
+`ASSERT_EQUAL` shows a diff for scalars, `std::string`, `const char*`,
+C-style arrays, and any iterable container whose elements implement
+`std::format`. Strings are compared character by character and containers
+element by element. In the terminal, `Expected` is green and `Received` is
+red, and the parts that differ are highlighted. `∅` marks something
+`Received` is missing, and an element it has but shouldn't is shown struck
+through.
 
 **Scalars**
 ```
-  + 42
-  - 43
+      Values differ:
+
+            Expected  42
+            Received  43
 ```
 
-**Strings — character level**
+**Strings**
 ```
-  + "hello world"
-  - "hello wurld"
+      Strings differ:
+
+            Expected  "hello world"
+            Received  "hello wurld"
 ```
 
-**Containers — element level**
+**Containers**
 ```
-  + [1, 2, 3, 4]
-  - [1, 2, 9, ∅]
+      Containers differ:
+
+            Expected  [1, 2]
+            Received  [1, 2, 3]
 ```
 
-Diff is supported for scalars, `std::string`, `const char*`, C-style arrays, and any iterable container whose elements implement `std::format`.
+**`ASSERT_NEAR`**
+```
+      Values not within epsilon:
+
+            Expected  1.5 ± 0.01
+            Received  1
+```
+
+### When a test throws
+
+An exception that escapes a test body, `BEFORE_EACH` or `AFTER_EACH` fails
+that test, and the run carries on. `what()` becomes the detail. A throwing
+`BEFORE_EACH` skips the test's body but still runs `AFTER_EACH`.
+
+```
+[FAIL] [Config] loads the settings file  (0.0094ms)
+
+      The test threw an exception:
+
+            settings.toml: no such file
+```
+
+Two cases still end the whole run: an exception escaping `BEFORE_ALL` or
+`AFTER_ALL`, and a memory fault such as an out-of-bounds read. Use `REQUIRE_*`
+to stop a test before it reads past a failed check.
+
+### Reporting a failure from your own helper
+
+Pass `__FILE__` and `__LINE__` (or a `std::source_location`) so the failure
+points at the caller:
+
+```cpp
+void AssertLintClean(const LintResult& result, std::source_location where = std::source_location::current()) {
+  if (result.Clean()) return;
+  Cimmerian::Assertions::fail(
+      where.file_name(), static_cast<int>(where.line()), "lint is not clean:", result.Violations()
+  );
+}
+```
+
+`Assertions::fail(file, line, message, details)` takes the detail lines as a
+`std::vector<std::string>`. If you already have one preformatted string,
+`Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(file, line, text)`
+uses its first line as the message and the rest as detail lines.
 
 ---
 
@@ -320,14 +441,17 @@ Diff is supported for scalars, `std::string`, `const char*`, C-style arrays, and
 Every test is timed automatically. No configuration required.
 
 ```
-[PASS] [Math] Addition  (0.0005ms)
-[PASS] [Math] Fibonacci  (0.0034ms)
-[Math] group total: 0.0039ms
+[Math]
+[PASS] [Math] adds two numbers  (0.0003ms)
+[PASS] [Math] computes fibonacci  (0.0267ms)
+[Math] group total: 0.0623ms
 
-────────────────────────────────────────
+
+────────────────────────────────────────────────
 Summary: 2 total, 2 passed, 0 failed
-Slowest: [Math] Fibonacci (0.0034ms)
-────────────────────────────────────────
+
+Slowest: [Math] computes fibonacci (0.0267ms)
+────────────────────────────────────────────────
 ```
 
 Timing is reported per test, per group, for the total suite, and highlights the slowest test in the summary.
@@ -338,15 +462,22 @@ Timing is reported per test, per group, for the total suite, and highlights the 
 
 ```
 Cimmerian/
-├── include/cimmerian/       — public headers
-│   ├── test.hpp             — single include entry point
-│   ├── test-registry.hpp    — test tree registration
-│   ├── test-runner.hpp      — execution and timing
-│   ├── test-assertions.hpp  — typed assertions and diff output
-│   ├── test-log.hpp         — coloured terminal logging
-│   └── ansi-formatter.hpp   — ANSI colour helpers
-├── src/                     — implementation files
-├── test/                    — Cimmerian's own self-tests
+├── include/cimmerian/                  — public headers
+│   ├── test.hpp                        — single include entry point
+│   ├── test-entry-point.hpp            — ready-made main()
+│   ├── test-registry.hpp               — test tree registration
+│   ├── test-runner.hpp                 — execution, timing and failure layout
+│   ├── test-assertions.hpp             — typed assertions and diff output
+│   ├── test-fail-record.hpp            — a failure: file, line, message, detail lines
+│   ├── test-fail-handler-registry.hpp  — where assertions report failures
+│   ├── test-mode.hpp                   — _SKIP / _ONLY resolution and --forbid-* flags
+│   ├── test-log.hpp                    — coloured terminal logging
+│   ├── ansi-formatter.hpp              — ANSI colour helpers
+│   ├── snapshot.hpp, snapshot/         — snapshot testing (optional)
+│   └── visual.hpp, visual/             — visual regression testing (optional)
+├── src/                                — implementation files
+├── test/                               — Cimmerian's own self-tests
+├── skills/cimmerian-testing/           — agent skill describing the consumer API
 └── CMakeLists.txt
 ```
 
