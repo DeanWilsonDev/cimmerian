@@ -419,6 +419,63 @@ DESCRIBE("Function Pointer Registration", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Commas in macro bodies — braces don't shield commas from the preprocessor,
+// so every macro that takes a body takes it variadically
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct Color {
+  int r;
+  int g;
+  int b;
+  int a;
+};
+
+static Color hookColor     = {0, 0, 0, 0};
+static Color allHooksColor = {0, 0, 0, 0};
+
+DESCRIBE("Commas In Macro Bodies", {
+  static constexpr Color describeColor{1, 2, 3, 4};
+
+  BEFORE_ALL({
+    allHooksColor = Color{9, 9, 9, 9};
+  });
+
+  AFTER_ALL({
+    allHooksColor = Color{0, 0, 0, 0};
+  });
+
+  BEFORE_EACH({
+    hookColor = Color{5, 6, 7, 8};
+  });
+
+  AFTER_EACH({
+    hookColor = Color{0, 0, 0, 0};
+  });
+
+  IT("IT takes a body with a brace-initialiser", {
+    Color fallback{1, 2, 3, 4};
+    ASSERT_EQUAL(fallback.a, 4);
+  });
+
+  IT("the hooks take bodies with brace-initialisers", {
+    ASSERT_EQUAL(hookColor.r, 5);
+    ASSERT_EQUAL(allHooksColor.r, 9);
+  });
+
+  IT("DESCRIBE takes a body with a brace-initialiser", {
+    ASSERT_EQUAL(describeColor.g, 2);
+  });
+
+  TEST_FN("TEST_FN takes a lambda with several captures", [expected = 3, actual = 3](void*) {
+    ASSERT_EQUAL(actual, expected);
+  });
+
+  IT_FN("IT_FN takes a lambda with several captures", [expected = 3, actual = 3](void*) {
+    ASSERT_EQUAL(actual, expected);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Lifecycle hooks — BEFORE_ALL / AFTER_ALL / BEFORE_EACH / AFTER_EACH
 // ─────────────────────────────────────────────────────────────────────────────
 

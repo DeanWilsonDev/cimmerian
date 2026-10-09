@@ -21,8 +21,8 @@ inline Cimmerian::TestMode _visual_test_scope_mode = Cimmerian::TestMode::Normal
 /* ========= VISUAL_DESCRIBE: ====== */
 /* ################################# */
 
-// Variadic so a BODY whose expansion contains top-level commas survives
-// being forwarded through VISUAL_DESCRIBE / _SKIP / _ONLY.
+// Takes its body as `...`, like every body-taking macro in cimmerian/test.hpp:
+// braces don't shield commas from the preprocessor.
 #define CIMMERIAN_VISUAL_DESCRIBE_WITH_MODE(mode, group_name, window_handle, ...)                  \
   CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_visual_desc_reg_, __COUNTER__) = []() {     \
     Cimmerian::Visual::VisualTestRegistry& _registry =                                             \
@@ -42,12 +42,18 @@ inline Cimmerian::TestMode _visual_test_scope_mode = Cimmerian::TestMode::Normal
     return true;                                                                                   \
   }();
 
-#define VISUAL_DESCRIBE(group_name, window_handle, BODY)                                           \
-  CIMMERIAN_VISUAL_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Normal, group_name, window_handle, BODY)
-#define VISUAL_DESCRIBE_SKIP(group_name, window_handle, BODY)                                      \
-  CIMMERIAN_VISUAL_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Skip, group_name, window_handle, BODY)
-#define VISUAL_DESCRIBE_ONLY(group_name, window_handle, BODY)                                      \
-  CIMMERIAN_VISUAL_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Only, group_name, window_handle, BODY)
+#define VISUAL_DESCRIBE(group_name, window_handle, ...)                                            \
+  CIMMERIAN_VISUAL_DESCRIBE_WITH_MODE(                                                             \
+      Cimmerian::TestMode::Normal, group_name, window_handle, __VA_ARGS__                          \
+  )
+#define VISUAL_DESCRIBE_SKIP(group_name, window_handle, ...)                                       \
+  CIMMERIAN_VISUAL_DESCRIBE_WITH_MODE(                                                             \
+      Cimmerian::TestMode::Skip, group_name, window_handle, __VA_ARGS__                            \
+  )
+#define VISUAL_DESCRIBE_ONLY(group_name, window_handle, ...)                                       \
+  CIMMERIAN_VISUAL_DESCRIBE_WITH_MODE(                                                             \
+      Cimmerian::TestMode::Only, group_name, window_handle, __VA_ARGS__                            \
+  )
 
 /* ################################# */
 /* ===== VISUAL_DESCRIBE_COMPONENT: */
@@ -58,11 +64,12 @@ inline Cimmerian::TestMode _visual_test_scope_mode = Cimmerian::TestMode::Normal
    cimmerian_navigation_without_platform_input_proposal.md Proposal B.
    Pass the resulting host's window handle explicitly to ASSERT_SNAPSHOT. */
 
-#define VISUAL_DESCRIBE_COMPONENT(group_name, BODY) VISUAL_DESCRIBE(group_name, nullptr, BODY)
-#define VISUAL_DESCRIBE_COMPONENT_SKIP(group_name, BODY)                                           \
-  VISUAL_DESCRIBE_SKIP(group_name, nullptr, BODY)
-#define VISUAL_DESCRIBE_COMPONENT_ONLY(group_name, BODY)                                           \
-  VISUAL_DESCRIBE_ONLY(group_name, nullptr, BODY)
+#define VISUAL_DESCRIBE_COMPONENT(group_name, ...)                                                 \
+  VISUAL_DESCRIBE(group_name, nullptr, __VA_ARGS__)
+#define VISUAL_DESCRIBE_COMPONENT_SKIP(group_name, ...)                                            \
+  VISUAL_DESCRIBE_SKIP(group_name, nullptr, __VA_ARGS__)
+#define VISUAL_DESCRIBE_COMPONENT_ONLY(group_name, ...)                                            \
+  VISUAL_DESCRIBE_ONLY(group_name, nullptr, __VA_ARGS__)
 
 /* ################################# */
 /* =========== VISUAL_TEST: ======== */

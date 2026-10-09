@@ -26,8 +26,10 @@ inline Cimmerian::TestMode _test_scope_mode = Cimmerian::TestMode::Normal;
 /* ========= DESCRIBE: ============= */
 /* ################################# */
 
-// Variadic so a BODY whose expansion contains top-level commas survives
-// being forwarded through DESCRIBE / DESCRIBE_SKIP / DESCRIBE_ONLY.
+// Every macro taking a body or a function takes it as `...`: braces and
+// square brackets don't shield commas from the preprocessor, so a fixed BODY
+// parameter would split `Color fallback{1, 2, 3, 4};` or a lambda with several
+// captures into extra macro arguments.
 #define CIMMERIAN_DESCRIBE_WITH_MODE(mode, group_name, ...)                                        \
   CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_desc_reg_, __COUNTER__) =     \
       []() {                                                                                       \
@@ -45,42 +47,42 @@ inline Cimmerian::TestMode _test_scope_mode = Cimmerian::TestMode::Normal;
         return true;                                                                               \
       }();
 
-#define DESCRIBE(group_name, BODY)                                                                 \
-  CIMMERIAN_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Normal, group_name, BODY)
-#define DESCRIBE_SKIP(group_name, BODY)                                                            \
-  CIMMERIAN_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Skip, group_name, BODY)
-#define DESCRIBE_ONLY(group_name, BODY)                                                            \
-  CIMMERIAN_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Only, group_name, BODY)
+#define DESCRIBE(group_name, ...)                                                                  \
+  CIMMERIAN_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Normal, group_name, __VA_ARGS__)
+#define DESCRIBE_SKIP(group_name, ...)                                                             \
+  CIMMERIAN_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Skip, group_name, __VA_ARGS__)
+#define DESCRIBE_ONLY(group_name, ...)                                                             \
+  CIMMERIAN_DESCRIBE_WITH_MODE(Cimmerian::TestMode::Only, group_name, __VA_ARGS__)
 
 /* ################################# */
 /* ========= HOOKS: ================ */
 /* ################################# */
 
-#define BEFORE_EACH(BODY)                                                                          \
+#define BEFORE_EACH(...)                                                                           \
   do {                                                                                             \
     Cimmerian::TestRegistry::GetInstance().SetBeforeEach(                                          \
-        _test_group, +[]([[maybe_unused]] void* user) BODY, nullptr, nullptr                                        \
+        _test_group, +[]([[maybe_unused]] void* user) __VA_ARGS__, nullptr, nullptr                \
     );                                                                                             \
   } while (0)
 
-#define AFTER_EACH(BODY)                                                                           \
+#define AFTER_EACH(...)                                                                            \
   do {                                                                                             \
     Cimmerian::TestRegistry::GetInstance().SetAfterEach(                                           \
-        _test_group, +[]([[maybe_unused]] void* user) BODY, nullptr, nullptr                                        \
+        _test_group, +[]([[maybe_unused]] void* user) __VA_ARGS__, nullptr, nullptr                \
     );                                                                                             \
   } while (0)
 
-#define BEFORE_ALL(BODY)                                                                           \
+#define BEFORE_ALL(...)                                                                            \
   do {                                                                                             \
     Cimmerian::TestRegistry::GetInstance().SetBeforeAll(                                           \
-        _test_group, +[]([[maybe_unused]] void* user) BODY, nullptr, nullptr                                        \
+        _test_group, +[]([[maybe_unused]] void* user) __VA_ARGS__, nullptr, nullptr                \
     );                                                                                             \
   } while (0)
 
-#define AFTER_ALL(BODY)                                                                            \
+#define AFTER_ALL(...)                                                                             \
   do {                                                                                             \
     Cimmerian::TestRegistry::GetInstance().SetAfterAll(                                            \
-        _test_group, +[]([[maybe_unused]] void* user) BODY, nullptr, nullptr                                        \
+        _test_group, +[]([[maybe_unused]] void* user) __VA_ARGS__, nullptr, nullptr                \
     );                                                                                             \
   } while (0)
 
@@ -105,13 +107,13 @@ inline Cimmerian::TestMode _test_scope_mode = Cimmerian::TestMode::Normal;
     return true;                                                                                   \
   }();
 
-#define CIMMERIAN_TEST_FN_WITH_MODE(mode, testName, FN)                                            \
+#define CIMMERIAN_TEST_FN_WITH_MODE(mode, testName, ...)                                           \
   CIMMERIAN_MAYBE_UNUSED static const bool MACRO_CAT(_test_framework_test_fn_reg_, __COUNTER__) =  \
       [=]() {                                                                                      \
         Cimmerian::TestRegistry& _registry = Cimmerian::TestRegistry::GetInstance();               \
         TestGroup* _group = _test_group ? _test_group : _registry.GetRootGroup();                  \
         _registry.RegisterTest(                                                                    \
-            _group, (testName), (FN), nullptr, nullptr,                                            \
+            _group, (testName), (__VA_ARGS__), nullptr, nullptr,                                   \
             Cimmerian::CombineTestModes(_test_scope_mode, (mode))                                  \
         );                                                                                         \
         return true;                                                                               \
@@ -124,20 +126,20 @@ inline Cimmerian::TestMode _test_scope_mode = Cimmerian::TestMode::Normal;
 #define TEST_ONLY(testName, ...)                                                                   \
   CIMMERIAN_TEST_WITH_MODE(Cimmerian::TestMode::Only, testName, __VA_ARGS__)
 
-#define TEST_FN(testName, FN)                                                                      \
-  CIMMERIAN_TEST_FN_WITH_MODE(Cimmerian::TestMode::Normal, testName, FN)
-#define TEST_FN_SKIP(testName, FN)                                                                 \
-  CIMMERIAN_TEST_FN_WITH_MODE(Cimmerian::TestMode::Skip, testName, FN)
-#define TEST_FN_ONLY(testName, FN)                                                                 \
-  CIMMERIAN_TEST_FN_WITH_MODE(Cimmerian::TestMode::Only, testName, FN)
+#define TEST_FN(testName, ...)                                                                     \
+  CIMMERIAN_TEST_FN_WITH_MODE(Cimmerian::TestMode::Normal, testName, __VA_ARGS__)
+#define TEST_FN_SKIP(testName, ...)                                                                \
+  CIMMERIAN_TEST_FN_WITH_MODE(Cimmerian::TestMode::Skip, testName, __VA_ARGS__)
+#define TEST_FN_ONLY(testName, ...)                                                                \
+  CIMMERIAN_TEST_FN_WITH_MODE(Cimmerian::TestMode::Only, testName, __VA_ARGS__)
 
-#define IT(testName, BODY) TEST(testName, BODY)
-#define IT_SKIP(testName, BODY) TEST_SKIP(testName, BODY)
-#define IT_ONLY(testName, BODY) TEST_ONLY(testName, BODY)
+#define IT(testName, ...) TEST(testName, __VA_ARGS__)
+#define IT_SKIP(testName, ...) TEST_SKIP(testName, __VA_ARGS__)
+#define IT_ONLY(testName, ...) TEST_ONLY(testName, __VA_ARGS__)
 
-#define IT_FN(testName, FN) TEST_FN(testName, FN)
-#define IT_FN_SKIP(testName, FN) TEST_FN_SKIP(testName, FN)
-#define IT_FN_ONLY(testName, FN) TEST_FN_ONLY(testName, FN)
+#define IT_FN(testName, ...) TEST_FN(testName, __VA_ARGS__)
+#define IT_FN_SKIP(testName, ...) TEST_FN_SKIP(testName, __VA_ARGS__)
+#define IT_FN_ONLY(testName, ...) TEST_FN_ONLY(testName, __VA_ARGS__)
 
 /* ################################# */
 /* ========= ASSERTIONS: =========== */
