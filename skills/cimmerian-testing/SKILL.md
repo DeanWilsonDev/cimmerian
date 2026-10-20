@@ -99,11 +99,26 @@ Every registration macro has `_SKIP` and `_ONLY` variants: `DESCRIBE_SKIP`,
 
 ### Assertions
 
-| Macro | Behavior on failure |
-|---|---|
-| `ASSERT_TRUE(cond)` / `ASSERT_FALSE(cond)` | reports, keeps running |
-| `ASSERT_EQUAL(a, b)` / `ASSERT_NOT_EQUAL(a, b)` | reports, keeps running |
-| `REQUIRE_TRUE(cond)` / `REQUIRE_EQUAL(a, b)` | reports, `return`s out of the test immediately |
+Every check comes in two forms. `ASSERT_*` reports the failure and keeps
+running; `REQUIRE_*` reports it and `return`s out of the test immediately.
+Arguments are actual first, expected second.
+
+| Fails when | Keeps running | Stops the test |
+|---|---|---|
+| `cond` is false | `ASSERT_TRUE(cond)` | `REQUIRE_TRUE(cond)` |
+| `cond` is true | `ASSERT_FALSE(cond)` | `REQUIRE_FALSE(cond)` |
+| `actual != expected` | `ASSERT_EQUAL(actual, expected)` | `REQUIRE_EQUAL(actual, expected)` |
+| `actual == expected` | `ASSERT_NOT_EQUAL(actual, expected)` | `REQUIRE_NOT_EQUAL(actual, expected)` |
+| they differ by more than `epsilon` | `ASSERT_NEAR(actual, expected, epsilon)` | `REQUIRE_NEAR(actual, expected, epsilon)` |
+| `ptr` isn't null | `ASSERT_NULL(ptr)` | `REQUIRE_NULL(ptr)` |
+| `ptr` is null | `ASSERT_NOT_NULL(ptr)` | `REQUIRE_NOT_NULL(ptr)` |
+| `expression` doesn't throw `ExceptionType` | `ASSERT_THROWS(expression, ExceptionType)` | `REQUIRE_THROWS(expression, ExceptionType)` |
+| `expression` throws | `ASSERT_NO_THROW(expression)` | `REQUIRE_NO_THROW(expression)` |
+
+Apart from the snapshot assertions below, that's the full set. There's no
+`EXPECT_*`, `CHECK_*`, `ASSERT_EQ`/`ASSERT_NE` or bare `REQUIRE(cond)`. A
+condition containing a top-level comma, such as
+`ASSERT_TRUE(std::is_same_v<A, B>)`, needs an extra pair of parentheses.
 
 `ASSERT_EQUAL` produces a visual diff on failure (character-level for
 strings, element-level for containers whose elements support

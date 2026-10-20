@@ -203,18 +203,74 @@ inline Cimmerian::TestMode _test_scope_mode = Cimmerian::TestMode::Normal;
     }                                                                                              \
   } while (0)
 
-#define REQUIRE_EQUAL(a, b)                                                                        \
+#define REQUIRE_FALSE(cond)                                                                        \
   do {                                                                                             \
-    if (!((a) == (b))) {                                                                           \
-      ::Cimmerian::Assertions::assert_equal((a), (b), __FILE__, __LINE__);                         \
+    if ((cond)) {                                                                                  \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__, "REQUIRE_FALSE failed: " #cond                                       \
+      );                                                                                           \
       return;                                                                                      \
     }                                                                                              \
+  } while (0)
+
+#define REQUIRE_EQUAL(a, b)                                                                        \
+  do {                                                                                             \
+    if (!::Cimmerian::Assertions::assert_equal((a), (b), __FILE__, __LINE__))                      \
+      return;                                                                                      \
+  } while (0)
+
+#define REQUIRE_NEAR(a, b, epsilon)                                                                \
+  do {                                                                                             \
+    if (!::Cimmerian::Assertions::assert_near((a), (b), (epsilon), __FILE__, __LINE__))            \
+      return;                                                                                      \
+  } while (0)
+
+#define REQUIRE_NOT_EQUAL(a, b)                                                                    \
+  do {                                                                                             \
+    if (!::Cimmerian::Assertions::assert_not_equal((a), (b), __FILE__, __LINE__))                  \
+      return;                                                                                      \
+  } while (0)
+
+#define REQUIRE_NULL(ptr)                                                                          \
+  do {                                                                                             \
+    if ((ptr) != nullptr) {                                                                        \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__, "REQUIRE_NULL failed: " #ptr " is not null"                          \
+      );                                                                                           \
+      return;                                                                                      \
+    }                                                                                              \
+  } while (0)
+
+#define REQUIRE_NOT_NULL(ptr)                                                                      \
+  do {                                                                                             \
+    if ((ptr) == nullptr) {                                                                        \
+      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
+          __FILE__, __LINE__, "REQUIRE_NOT_NULL failed: " #ptr " is null"                          \
+      );                                                                                           \
+      return;                                                                                      \
+    }                                                                                              \
+  } while (0)
+
+#define REQUIRE_THROWS(expression, exception_type)                                                 \
+  do {                                                                                             \
+    if (!::Cimmerian::Assertions::assert_throws<exception_type>(                                   \
+            [&]() { (expression); }, "REQUIRE_THROWS", #expression, __FILE__, __LINE__             \
+        ))                                                                                         \
+      return;                                                                                      \
+  } while (0)
+
+#define REQUIRE_NO_THROW(expression)                                                               \
+  do {                                                                                             \
+    if (!::Cimmerian::Assertions::assert_no_throw(                                                 \
+            [&]() { (expression); }, "REQUIRE_NO_THROW", #expression, __FILE__, __LINE__           \
+        ))                                                                                         \
+      return;                                                                                      \
   } while (0)
 
 #define ASSERT_THROWS(expression, exception_type)                                                  \
   do {                                                                                             \
     ::Cimmerian::Assertions::assert_throws<exception_type>(                                        \
-        [&]() { (expression); }, #expression, __FILE__, __LINE__                                   \
+        [&]() { (expression); }, "ASSERT_THROWS", #expression, __FILE__, __LINE__                  \
     );                                                                                             \
   } while (0)
 
@@ -239,19 +295,7 @@ inline Cimmerian::TestMode _test_scope_mode = Cimmerian::TestMode::Normal;
 
 #define ASSERT_NO_THROW(expression)                                                                \
   do {                                                                                             \
-    try {                                                                                          \
-      (expression);                                                                                \
-    }                                                                                              \
-    catch (const std::exception& _e) {                                                             \
-      const std::string _assertNoThrowMessage =                                                    \
-          "ASSERT_NO_THROW failed: " #expression " threw: " + std::string(_e.what());              \
-      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
-          __FILE__, __LINE__, _assertNoThrowMessage.c_str()                                        \
-      );                                                                                           \
-    }                                                                                              \
-    catch (...) {                                                                                  \
-      Cimmerian::TestFailHandlerRegistry::GetInstance().NotifyTestFail(                            \
-          __FILE__, __LINE__, "ASSERT_NO_THROW failed: " #expression " threw unknown exception"    \
-      );                                                                                           \
-    }                                                                                              \
+    ::Cimmerian::Assertions::assert_no_throw(                                                      \
+        [&]() { (expression); }, "ASSERT_NO_THROW", #expression, __FILE__, __LINE__                \
+    );                                                                                             \
   } while (0)

@@ -326,7 +326,14 @@ These report failure and immediately stop the current test via `return`.
 | Macro | Fails when |
 |---|---|
 | `REQUIRE_TRUE(cond)` | `cond` is false |
+| `REQUIRE_FALSE(cond)` | `cond` is true |
 | `REQUIRE_EQUAL(actual, expected)` | `actual != expected` |
+| `REQUIRE_NOT_EQUAL(actual, expected)` | `actual == expected` |
+| `REQUIRE_NEAR(actual, expected, epsilon)` | `actual` and `expected` differ by more than `epsilon` |
+| `REQUIRE_NULL(ptr)` | `ptr` isn't null |
+| `REQUIRE_NOT_NULL(ptr)` | `ptr` is null |
+| `REQUIRE_THROWS(expression, ExceptionType)` | `expression` doesn't throw, or throws something other than `ExceptionType` |
+| `REQUIRE_NO_THROW(expression)` | `expression` throws |
 
 Use these when a later line only makes sense if the check passed, such as a
 size check that guards an index. A continuing assertion would carry on and

@@ -317,15 +317,29 @@ DESCRIBE("Exception Assertions", {
   });
 
   TEST("ASSERT_THROWS produces a failure when no exception is thrown", {
-    ASSERT_FAILS(ASSERT_THROWS((void)(1 + 1), std::runtime_error));
+    auto failure = CAPTURE_FAILURE(ASSERT_THROWS((void)(1 + 1), std::runtime_error));
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "ASSERT_THROWS failed: (void)(1 + 1) did not throw");
   });
 
   TEST("ASSERT_THROWS produces a failure when the wrong exception type is thrown", {
-    ASSERT_FAILS(ASSERT_THROWS(throw std::logic_error("wrong kind"), std::runtime_error));
+    auto failure =
+      CAPTURE_FAILURE(ASSERT_THROWS(throw std::logic_error("wrong kind"), std::runtime_error));
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(
+      failure->message,
+      "ASSERT_THROWS failed: throw std::logic_error(\"wrong kind\") threw an unexpected "
+      "exception type"
+    );
   });
 
   TEST("ASSERT_NO_THROW produces a failure when an exception is thrown", {
-    ASSERT_FAILS(ASSERT_NO_THROW(throw std::runtime_error("unexpected")));
+    auto failure = CAPTURE_FAILURE(ASSERT_NO_THROW(throw std::runtime_error("unexpected")));
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(
+      failure->message,
+      "ASSERT_NO_THROW failed: throw std::runtime_error(\"unexpected\") threw: unexpected"
+    );
   });
 });
 
@@ -371,26 +385,177 @@ DESCRIBE("Contained Test Stages", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REQUIRE_TRUE / REQUIRE_EQUAL — halt-on-failure variants
+// REQUIRE_* — halt-on-failure variants
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// Each check runs inside CAPTURE_FAILURE with a marker statement after it, so
+// the test can see whether the REQUIRE_ let execution reach the next line.
 
 DESCRIBE("Require Variants", {
   TEST("REQUIRE_TRUE passes and execution continues", {
-    REQUIRE_TRUE(1 == 1);
-    ASSERT_TRUE(true);
-  });
-
-  TEST("REQUIRE_EQUAL passes and execution continues", {
-    REQUIRE_EQUAL(7, 7);
-    ASSERT_TRUE(true);
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_TRUE(1 == 1); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
   });
 
   TEST("REQUIRE_TRUE produces a failure and halts the test body", {
-    ASSERT_FAILS(REQUIRE_TRUE(false));
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_TRUE(1 == 2); reachedAfterRequire = true);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "REQUIRE_TRUE failed: 1 == 2");
+    ASSERT_FALSE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_FALSE passes and execution continues", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_FALSE(1 == 2); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_FALSE produces a failure and halts the test body", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_FALSE(1 == 1); reachedAfterRequire = true);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "REQUIRE_FALSE failed: 1 == 1");
+    ASSERT_FALSE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_EQUAL passes and execution continues", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_EQUAL(7, 7); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
   });
 
   TEST("REQUIRE_EQUAL produces a failure and halts the test body", {
-    ASSERT_FAILS(REQUIRE_EQUAL(1, 99));
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_EQUAL(1, 99); reachedAfterRequire = true);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "Values differ:");
+    ASSERT_FALSE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_EQUAL compares C strings by content, as ASSERT_EQUAL does", {
+    const std::string owned = "abc";
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_EQUAL(owned.c_str(), "abc"); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_EQUAL evaluates each argument once", {
+    int calls = 0;
+    auto nextCall = [&] { return ++calls; };
+    ASSERT_FAILS(REQUIRE_EQUAL(nextCall(), 99));
+    ASSERT_EQUAL(calls, 1);
+  });
+
+  TEST("REQUIRE_NEAR passes and execution continues", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NEAR(0.1 + 0.2, 0.3, 1e-9); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NEAR produces a failure and halts the test body", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NEAR(1.0, 2.0, 0.01); reachedAfterRequire = true);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "Values not within epsilon:");
+    ASSERT_FALSE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NOT_EQUAL passes and execution continues", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NOT_EQUAL(1, 2); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NOT_EQUAL produces a failure and halts the test body", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NOT_EQUAL(5, 5); reachedAfterRequire = true);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "Expected values to differ but they were equal:");
+    ASSERT_FALSE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NULL passes and execution continues", {
+    int* ptr = nullptr;
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NULL(ptr); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NULL produces a failure and halts the test body", {
+    int value = 1;
+    int* ptr  = &value;
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NULL(ptr); reachedAfterRequire = true);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "REQUIRE_NULL failed: ptr is not null");
+    ASSERT_FALSE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NOT_NULL passes and execution continues", {
+    int value = 42;
+    int* ptr  = &value;
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NOT_NULL(ptr); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NOT_NULL produces a failure and halts the test body", {
+    int* ptr = nullptr;
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NOT_NULL(ptr); reachedAfterRequire = true);
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "REQUIRE_NOT_NULL failed: ptr is null");
+    ASSERT_FALSE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_THROWS passes and execution continues", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(
+      REQUIRE_THROWS(throw std::runtime_error("boom"), std::runtime_error);
+      reachedAfterRequire = true
+    );
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_THROWS produces a failure and halts the test body", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(
+      REQUIRE_THROWS((void)(1 + 1), std::runtime_error); reachedAfterRequire = true
+    );
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "REQUIRE_THROWS failed: (void)(1 + 1) did not throw");
+    ASSERT_FALSE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NO_THROW passes and execution continues", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(REQUIRE_NO_THROW((void)(1 + 1)); reachedAfterRequire = true);
+    ASSERT_FALSE(failure.has_value());
+    ASSERT_TRUE(reachedAfterRequire);
+  });
+
+  TEST("REQUIRE_NO_THROW produces a failure and halts the test body", {
+    bool reachedAfterRequire = false;
+    auto failure = CAPTURE_FAILURE(
+      REQUIRE_NO_THROW(throw std::runtime_error("unexpected")); reachedAfterRequire = true
+    );
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(
+      failure->message,
+      "REQUIRE_NO_THROW failed: throw std::runtime_error(\"unexpected\") threw: unexpected"
+    );
+    ASSERT_FALSE(reachedAfterRequire);
   });
 });
 

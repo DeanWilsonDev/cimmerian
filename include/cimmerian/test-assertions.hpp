@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <cstddef>
+#include <exception>
 #include <format>
 #include <span>
 #include <type_traits>
@@ -21,6 +22,9 @@ namespace Cimmerian::Assertions {
 //                ^ actual             ^ expected
 // The output helpers take (expected, actual), matching the order the two lines
 // are printed in.
+//
+// Each assert_* returns whether it passed, so a REQUIRE_ macro can stop the
+// test on failure without evaluating its arguments a second time.
 
 template <typename T>
 concept StringLike = std::convertible_to<const T&, std::string_view>;
@@ -188,7 +192,7 @@ fail(const char* file, int line, std::string message, std::vector<std::string> d
 }
 
 template <typename TValue, typename TEpsilon>
-inline void
+inline bool
 assert_near(TValue actual, TValue expected, TEpsilon epsilon, const char* file, int line)
 {
   const TValue difference = (actual > expected) ? (actual - expected) : (expected - actual);
@@ -201,12 +205,14 @@ assert_near(TValue actual, TValue expected, TEpsilon epsilon, const char* file, 
             Ansi::AnsiFormatter::DiffReceived(FormatValue(actual))
         )
     );
+    return false;
   }
+  return true;
 }
 
 template <typename A, typename B>
   requires(!Iterable<A> && !Iterable<B> && !(StringLike<A> && StringLike<B>))
-void assert_equal_impl(const A& actualValue, const B& expectedValue, const char* file, int line)
+bool assert_equal_impl(const A& actualValue, const B& expectedValue, const char* file, int line)
 {
   if (!(actualValue == expectedValue)) {
     fail(
@@ -216,11 +222,13 @@ void assert_equal_impl(const A& actualValue, const B& expectedValue, const char*
             Ansi::AnsiFormatter::DiffReceived(FormatValue(actualValue))
         )
     );
+    return false;
   }
+  return true;
 }
 
 template <StringLike ActualString, StringLike ExpectedString>
-void assert_equal_impl(
+bool assert_equal_impl(
     const ActualString& actualString,
     const ExpectedString& expectedString,
     const char* file,
@@ -235,12 +243,14 @@ void assert_equal_impl(
         file, line,
         "Strings differ:", FormatStringDiff(std::string(expectedText), std::string(actualText))
     );
+    return false;
   }
+  return true;
 }
 
 template <class T, std::size_t actualArraySize, class U, std::size_t expectedArraySize>
   requires(!std::same_as<std::remove_cv_t<T>, char>)
-void assert_equal_impl(
+bool assert_equal_impl(
     const T (&actualArray)[actualArraySize],
     const U (&expectedArray)[expectedArraySize],
     const char* file,
@@ -259,12 +269,14 @@ void assert_equal_impl(
         file, line, actualArraySize != expectedArraySize ? "Array sizes differ:" : "Arrays differ:",
         FormatContainerDiff(expectedSpan, actualSpan)
     );
+    return false;
   }
+  return true;
 }
 
 template <Iterable ActualContainer, Iterable ExpectedContainer>
   requires(!(StringLike<ActualContainer> && StringLike<ExpectedContainer>))
-void assert_equal_impl(
+bool assert_equal_impl(
     const ActualContainer& actualContainer,
     const ExpectedContainer& expectedContainer,
     const char* file,
@@ -283,29 +295,33 @@ void assert_equal_impl(
 
   if (!containersAreEqual) {
     fail(file, line, "Containers differ:", FormatContainerDiff(expectedContainer, actualContainer));
+    return false;
   }
+  return true;
 }
 
 template <class A, class B>
-void assert_equal(const A& actual, const B& expected, const char* file, int line)
+bool assert_equal(const A& actual, const B& expected, const char* file, int line)
 {
-  assert_equal_impl(actual, expected, file, line);
+  return assert_equal_impl(actual, expected, file, line);
 }
 
 template <typename A, typename B>
   requires(!Iterable<A> && !Iterable<B> && !(StringLike<A> && StringLike<B>))
-void assert_not_equal_impl(const A& actualValue, const B& expectedValue, const char* file, int line)
+bool assert_not_equal_impl(const A& actualValue, const B& expectedValue, const char* file, int line)
 {
   if (actualValue == expectedValue) {
     fail(
         file, line, "Expected values to differ but they were equal:",
         {"both were: " + Ansi::AnsiFormatter::DiffReceived(FormatValue(actualValue))}
     );
+    return false;
   }
+  return true;
 }
 
 template <StringLike ActualString, StringLike ExpectedString>
-void assert_not_equal_impl(
+bool assert_not_equal_impl(
     const ActualString& actualString,
     const ExpectedString& expectedString,
     const char* file,
@@ -320,12 +336,14 @@ void assert_not_equal_impl(
         file, line, "Expected strings to differ but they were equal:",
         {"both were: \"" + Ansi::AnsiFormatter::DiffReceived(std::string(actualText)) + "\""}
     );
+    return false;
   }
+  return true;
 }
 
 template <Iterable ActualContainer, Iterable ExpectedContainer>
   requires(!(StringLike<ActualContainer> && StringLike<ExpectedContainer>))
-void assert_not_equal_impl(
+bool assert_not_equal_impl(
     const ActualContainer& actualContainer,
     const ExpectedContainer& expectedContainer,
     const char* file,
@@ -347,38 +365,71 @@ void assert_not_equal_impl(
         file, line, "Expected containers to differ but they were equal:",
         FormatContainerDiff(expectedContainer, actualContainer)
     );
+    return false;
   }
+  return true;
 }
 
 template <class A, class B>
-void assert_not_equal(const A& actual, const B& expected, const char* file, int line)
+bool assert_not_equal(const A& actual, const B& expected, const char* file, int line)
 {
-  assert_not_equal_impl(actual, expected, file, line);
+  return assert_not_equal_impl(actual, expected, file, line);
 }
 
 template <typename TExceptionType, typename TCallable>
-inline void assert_throws(TCallable&& callable, const char* expression, const char* file, int line)
+inline bool assert_throws(
+    TCallable&& callable,
+    const char* macroName,
+    const char* expression,
+    const char* file,
+    int line
+)
 {
-  bool didThrow = false;
-
   try {
     callable();
   }
   catch (const TExceptionType&) {
-    didThrow = true;
+    return true;
   }
   catch (...) {
-    const std::string message =
-        std::string("ASSERT_THROWS failed: ") + expression + " threw an unexpected exception type";
-    fail(file, line, message);
-    return;
+    fail(
+        file, line,
+        std::string(macroName) + " failed: " + expression + " threw an unexpected exception type"
+    );
+    return false;
   }
 
-  if (!didThrow) {
-    const std::string message =
-        std::string("ASSERT_THROWS failed: ") + expression + " did not throw";
-    fail(file, line, message);
+  fail(file, line, std::string(macroName) + " failed: " + expression + " did not throw");
+  return false;
+}
+
+template <typename TCallable>
+inline bool assert_no_throw(
+    TCallable&& callable,
+    const char* macroName,
+    const char* expression,
+    const char* file,
+    int line
+)
+{
+  try {
+    callable();
   }
+  catch (const std::exception& thrownException) {
+    // The preformatted overload, so a multi-line what() becomes detail lines
+    TestFailHandlerRegistry::GetInstance().NotifyTestFail(
+        file, line,
+        std::string(macroName) + " failed: " + expression + " threw: " + thrownException.what()
+    );
+    return false;
+  }
+  catch (...) {
+    fail(
+        file, line, std::string(macroName) + " failed: " + expression + " threw unknown exception"
+    );
+    return false;
+  }
+  return true;
 }
 
 } // namespace Cimmerian::Assertions
