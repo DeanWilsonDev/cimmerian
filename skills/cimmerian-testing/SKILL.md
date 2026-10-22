@@ -32,7 +32,7 @@ target_compile_features(my_tests PUBLIC cxx_std_26)
 #include "cimmerian/test.hpp"
 
 int main(int argc, char* argv[]) {
-  Cimmerian::TestModeRegistry::GetInstance().ParseArgs(argc, argv); // --forbid-only / --forbid-skip
+  Cimmerian::ParseArgs(argc, argv); // --filter, --list, --shard, --forbid-only, ...
   Cimmerian::TestRunner runner;
   auto summary = runner.RunAll(&Cimmerian::TestRegistry::GetInstance());
   return summary.failed > 0 ? 1 : 0;
@@ -94,8 +94,28 @@ Every registration macro has `_SKIP` and `_ONLY` variants: `DESCRIBE_SKIP`,
   any matching test exists, the runner runs nothing. It lists each offending
   test by full group path and exits non-zero. `--forbid-only` also stops
   `_ONLY` from focusing the run. A hand-written `main` must call
-  `TestModeRegistry::GetInstance().ParseArgs(argc, argv)` for the flags to
-  work; `test-entry-point.hpp` already does.
+  `Cimmerian::ParseArgs(argc, argv)` for the flags to work;
+  `test-entry-point.hpp` already does.
+
+### Picking and sharding tests from the command line
+
+To run one test or a few, pass `--filter`, rather than editing in an `_ONLY`
+and rebuilding.
+
+| Flag | Effect |
+|---|---|
+| `--filter <pattern>` | Runs only the tests whose full name contains `pattern` (case-sensitive) |
+| `--list` | Prints the full name of each test a run would run, one per line, and runs nothing |
+| `--shard <index>/<count>` | Runs the `index`-th of `count` slices, counting from 1 |
+
+- A full name is the group path plus the test name, as `--list` prints it:
+  `Parser > Nested > handles commas`.
+- To use every core, run `--shard 1/N` to `--shard N/N` as N processes at
+  once, e.g. through CTest (see the README), and pass if every one exits 0.
+  Each top-level `DESCRIBE` stays whole in one shard, and the shards together
+  run each test exactly once.
+- `--update-snapshots` can't be combined with `--shard`; update snapshots in
+  one unsharded run.
 
 ### Assertions
 

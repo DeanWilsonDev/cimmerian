@@ -6,6 +6,7 @@
 #include <exception>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -151,8 +152,18 @@ private:
   bool isFailure;
   int totalFailures;
 
+  // Set by RunAll from --filter and --shard. A test outside it isn't run,
+  // printed or counted. Until RunAll sets it, every test is in scope, so
+  // RunGroup and RunOne called directly run everything.
+  bool hasScope = false;
+  std::unordered_set<const TestCase*> testsInScope;
+
   std::vector<TestFailRecord> pendingFailures;
   static inline TestRunner* activeInstance = nullptr;
+
+  bool IsInScope(const TestCase& test) const;
+  bool WillRun(const TestCase& test) const;
+  bool WillPrint(const TestCase& test) const;
 };
 
 } // namespace Cimmerian

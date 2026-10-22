@@ -55,7 +55,8 @@ public:
   void SetFilter(const std::string& pattern) { this->filter = pattern; }
 
   // Parses --update-snapshots, --review-snapshots, --snapshot-dir <path> and
-  // --filter <pattern> out of argv.
+  // --filter <pattern> out of argv, and passes argv to
+  // TestSelectionRegistry::ParseArgs for --filter, --list and --shard.
   void ParseArgs(int argc, char* argv[]);
 
   VisualTestRunSummary RunAll(const VisualTestRegistry* registry);
@@ -84,6 +85,7 @@ private:
   std::shared_ptr<IScreenCapture> capture;
   std::shared_ptr<IEventInjector> injector;
   std::string filter;
+  int filterMatchCount = 0;
   std::unique_ptr<SnapshotStore> store;
 
   std::string currentGroupPath;
@@ -95,7 +97,10 @@ private:
 
   static inline VisualTestRunner* activeInstance = nullptr;
 
+  // SetFilter's pattern, or else the --filter that TestSelectionRegistry read.
+  const std::string& GetEffectiveFilter() const;
   bool MatchesFilter(const std::string& fullyQualifiedName) const;
+  void ListTests(const VisualTestGroup* group) const;
   void WriteReport(VisualTestRunSummary* summary) const;
   void AssertSnapshotAgainst(const std::string& label, void* windowHandle, const DiffOptions& options);
 };

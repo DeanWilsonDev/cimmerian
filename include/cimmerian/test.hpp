@@ -3,6 +3,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include "test-args.hpp"
 #include "test-assertions.hpp"
 #include "test-macro-helpers.hpp"
 #include "test-runner.hpp"

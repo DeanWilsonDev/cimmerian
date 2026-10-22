@@ -47,7 +47,7 @@ option(CIMMERIAN_ENABLE_VISUAL_TESTING
 # Library target
 # -------------------------
 add_library(cimmerian STATIC src/test-group.cpp src/test-registry.cpp
-                              src/test-runner.cpp)
+                              src/test-runner.cpp src/test-selection.cpp)
 
 target_include_directories(
   cimmerian PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -274,7 +274,8 @@ option(CIMMERIAN_BUILD_TESTS "Build cimmerian tests"
 if(CIMMERIAN_BUILD_TESTS)
   enable_language(CXX)
 
-  set(_CIMMERIAN_TEST_SOURCES test/test-main.cpp test/example.test.cpp)
+  set(_CIMMERIAN_TEST_SOURCES test/test-main.cpp test/example.test.cpp
+                              test/selection.test.cpp)
 
   if(CIMMERIAN_ENABLE_SNAPSHOT_TESTING)
     list(APPEND _CIMMERIAN_TEST_SOURCES test/snapshot.test.cpp)

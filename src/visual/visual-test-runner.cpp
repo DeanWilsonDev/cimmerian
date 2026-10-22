@@ -11,6 +11,7 @@
 #include "cimmerian/snapshot/snapshot-run-mode.hpp"
 #include "cimmerian/test-log.hpp"
 #include "cimmerian/test-mode.hpp"
+#include "cimmerian/test-selection.hpp"
 
 namespace Cimmerian::Visual {
 
@@ -153,14 +154,37 @@ void VisualTestRunner::ParseArgs(int argc, char* argv[])
       this->SetFilter(argv[++i]);
     }
   }
+  TestSelectionRegistry::GetInstance().ParseArgs(argc, argv);
+}
+
+const std::string& VisualTestRunner::GetEffectiveFilter() const
+{
+  return this->filter.empty() ? TestSelectionRegistry::GetInstance().Get().filter : this->filter;
 }
 
 bool VisualTestRunner::MatchesFilter(const std::string& fullyQualifiedName) const
 {
-  if (this->filter.empty()) {
-    return true;
+  return MatchesTestFilter(fullyQualifiedName, this->GetEffectiveFilter());
+}
+
+// Prints the full name of each test a run would execute, one per line, as the
+// unit runner does under --list.
+void VisualTestRunner::ListTests(const VisualTestGroup* group) const
+{
+  if (!group) {
+    return;
   }
-  return fullyQualifiedName.find(this->filter) != std::string::npos;
+  const std::string groupPath = BuildVisualGroupPath(group);
+  for (const VisualTestCase& test : group->GetTests()) {
+    const std::string fullName = JoinTestName(groupPath, test.GetName());
+    if (this->MatchesFilter(fullName) &&
+        TestModeRegistry::GetInstance().ShouldRun(test.GetMode())) {
+      std::printf("%s\n", fullName.c_str());
+    }
+  }
+  for (std::size_t i = 0; i < group->GetChildCount(); ++i) {
+    this->ListTests(group->GetChild(i));
+  }
 }
 
 void VisualTestRunner::SendEvent(const UIEvent& event)
@@ -271,10 +295,11 @@ void VisualTestRunner::AssertSnapshotAgainst(const std::string& label, void* win
 void VisualTestRunner::RunOne(const VisualTestGroup* group, const VisualTestCase* test, VisualTestRunSummary* summary)
 {
   const std::string groupPath = BuildVisualGroupPath(group);
-  const std::string fullyQualifiedName = groupPath + " > " + test->GetName();
+  const std::string fullyQualifiedName = JoinTestName(groupPath, test->GetName());
   if (!this->MatchesFilter(fullyQualifiedName)) {
     return;
   }
+  this->filterMatchCount++;
 
   if (test->GetMode() == TestMode::Skip) {
     summary->total++;
@@ -354,9 +379,29 @@ VisualTestRunSummary VisualTestRunner::RunAll(const VisualTestRegistry* registry
 {
   VisualTestRunSummary summary;
   this->reportEntries.clear();
+  this->filterMatchCount = 0;
 
   if (!registry || !registry->GetRootGroup()) {
     TEST_LOG_ERROR("root VisualTestGroup was unable to be set on default registry");
+    return summary;
+  }
+
+  // Command-line errors are counted as a failure, like forbidden tests below.
+  const TestSelectionOptions& selectionOptions = TestSelectionRegistry::GetInstance().Get();
+  if (!selectionOptions.error.empty()) {
+    TEST_LOG_ERROR("{}; not running any visual tests", selectionOptions.error);
+    summary.failed = 1;
+    return summary;
+  }
+
+  // Every visual test runs in shard 1, so the shards together still run each
+  // one once, and only one process drives the screen.
+  const bool runsInThisShard = !selectionOptions.shard || selectionOptions.shard->index == 1;
+
+  if (selectionOptions.listOnly) {
+    if (runsInThisShard) {
+      this->ListTests(registry->GetRootGroup());
+    }
     return summary;
   }
 
@@ -377,6 +422,15 @@ VisualTestRunSummary VisualTestRunner::RunAll(const VisualTestRegistry* registry
     return summary;
   }
 
+  if (!runsInThisShard) {
+    std::printf(
+        "Shard %d/%d runs no visual tests; they all run in shard 1/%d\n",
+        selectionOptions.shard->index, selectionOptions.shard->count, selectionOptions.shard->count
+    );
+    std::printf("────────────────────────────────────────────────\n");
+    return summary;
+  }
+
   this->RunGroup(registry->GetRootGroup(), &summary);
 
   std::printf(
@@ -387,6 +441,14 @@ VisualTestRunSummary VisualTestRunner::RunAll(const VisualTestRegistry* registry
     std::printf(", %d skipped", summary.skipped);
   }
   std::printf("\n");
+  if (!this->GetEffectiveFilter().empty() && this->filterMatchCount == 0) {
+    TEST_LOG_PRINT(
+        Log::LogColor::Yellow, "--filter \"{}\" matched no visual tests", this->GetEffectiveFilter()
+    );
+  }
+  if (selectionOptions.shard) {
+    std::printf("Shard 1/%d runs every visual test\n", selectionOptions.shard->count);
+  }
   std::printf("────────────────────────────────────────────────\n");
 
   if (this->mode == VisualRunMode::Review) {

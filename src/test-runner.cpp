@@ -11,6 +11,7 @@
 #include "cimmerian/test-group.hpp"
 #include "cimmerian/test-log.hpp"
 #include "cimmerian/test-mode.hpp"
+#include "cimmerian/test-selection.hpp"
 #include <chrono>
 #include <cstdio>
 #include <cstdarg>
@@ -119,16 +120,21 @@ static bool AnyTestInSubtree(const TestGroup* group, TPredicate predicate)
   return false;
 }
 
-static bool WillRun(const TestCase& test)
+bool TestRunner::IsInScope(const TestCase& test) const
 {
-  return TestModeRegistry::GetInstance().ShouldRun(test.GetMode());
+  return !this->hasScope || this->testsInScope.contains(&test);
+}
+
+bool TestRunner::WillRun(const TestCase& test) const
+{
+  return this->IsInScope(test) && TestModeRegistry::GetInstance().ShouldRun(test.GetMode());
 }
 
 // Tests left out by an _ONLY elsewhere aren't printed, so a group made up
 // entirely of those stays out of the output.
-static bool WillPrint(const TestCase& test)
+bool TestRunner::WillPrint(const TestCase& test) const
 {
-  return test.GetMode() == TestMode::Skip || WillRun(test);
+  return this->IsInScope(test) && (test.GetMode() == TestMode::Skip || this->WillRun(test));
 }
 
 static void CollectForbiddenTests(const TestGroup* group, std::vector<std::string>* forbiddenTests)
@@ -150,6 +156,10 @@ static void CollectForbiddenTests(const TestGroup* group, std::vector<std::strin
 
 void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSummary* summary)
 {
+  if (!this->IsInScope(*test)) {
+    return;
+  }
+
   summary->total++;
 
   if (test->GetMode() == TestMode::Skip) {
@@ -160,7 +170,7 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
     return;
   }
 
-  if (!WillRun(*test)) {
+  if (!this->WillRun(*test)) {
     summary->skipped++;
     return;
   }
@@ -229,14 +239,19 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
   TEST_LOG_PRINT(
       LogColor::Yellow, "[%s] - Test Count: %zu", group->GetName(), group->GetTests().size()
   );
-#else
-  if (strcmp(group->GetName(), "ROOT") && AnyTestInSubtree(group, WillPrint)) {
+#endif
+
+  const auto willRun = [this](const TestCase& test) { return this->WillRun(test); };
+  const auto willPrint = [this](const TestCase& test) { return this->WillPrint(test); };
+
+#ifndef ENABLE_DEBUG
+  if (strcmp(group->GetName(), "ROOT") && AnyTestInSubtree(group, willPrint)) {
     TEST_LOG_PRINT(LogColor::Cyan, "[{}]", group->GetName());
   }
 #endif
 
   // Skipped tests don't need the group's fixtures set up.
-  const bool runsAnyTest = AnyTestInSubtree(group, WillRun);
+  const bool runsAnyTest = AnyTestInSubtree(group, willRun);
 
   if (runsAnyTest) {
     this->BeginContext(group->GetName(), "(before_all)");
@@ -253,7 +268,7 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
 
   for (size_t i = 0; i < group->GetChildCount(); ++i) {
     this->RunGroup(group->GetChild(i), summary);
-    if (AnyTestInSubtree(group->GetChild(i), WillPrint)) {
+    if (AnyTestInSubtree(group->GetChild(i), willPrint)) {
       std::printf("\n");
     }
   }
@@ -286,6 +301,26 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
 
   TestRunSummary summary;
 
+  // Command-line errors are counted as a failure, like forbidden tests below,
+  // so entry points that exit on summary.failed fail the run.
+  const TestSelectionOptions& selectionOptions = TestSelectionRegistry::GetInstance().Get();
+  if (!selectionOptions.error.empty()) {
+    TEST_LOG_ERROR("{}; not running any tests", selectionOptions.error);
+    summary.failed = 1;
+    return summary;
+  }
+
+#ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
+  if (selectionOptions.shard && Snapshot::SnapshotRunModeRegistry::GetInstance().IsUpdateMode()) {
+    TEST_LOG_ERROR(
+        "--update-snapshots can't be used with --shard, since parallel shards would write the same "
+        "snapshot files; update them in one unsharded run. Not running any tests"
+    );
+    summary.failed = 1;
+    return summary;
+  }
+#endif
+
   std::vector<std::string> forbiddenTests;
   CollectForbiddenTests(registry->GetRootGroup(), &forbiddenTests);
   if (!forbiddenTests.empty()) {
@@ -295,6 +330,26 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
     }
     // Counted as failures so entry points that exit on summary.failed fail the run.
     summary.failed = static_cast<int>(forbiddenTests.size());
+    return summary;
+  }
+
+  const TestSelection selection = SelectTests(
+      registry->GetRootGroup(), selectionOptions.filter, selectionOptions.shard,
+      [](const TestCase& test) { return TestModeRegistry::GetInstance().ShouldRun(test.GetMode()); }
+  );
+  this->testsInScope.clear();
+  for (const SelectedTest& selected : selection.tests) {
+    this->testsInScope.insert(selected.test);
+  }
+  this->hasScope = true;
+
+  // Only the names, one per line and without colour, so a script can read them.
+  if (selectionOptions.listOnly) {
+    for (const SelectedTest& selected : selection.tests) {
+      if (this->WillRun(*selected.test)) {
+        std::printf("%s\n", selected.fullName.c_str());
+      }
+    }
     return summary;
   }
 
@@ -338,6 +393,30 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
     std::printf(
         "%sFocused run: only *_ONLY tests were run%s\n",
         Ansi::ANSI_COLOR_BRIGHT_YELLOW, Ansi::ANSI_RESET
+    );
+  }
+
+  if (!selectionOptions.filter.empty()) {
+    if (selection.matchedCount == 0) {
+      std::printf(
+          "%s--filter \"%s\" matched no tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+          selectionOptions.filter.c_str(), Ansi::ANSI_RESET
+      );
+    }
+    else {
+      std::printf(
+          "%sFilter \"%s\": %d of %d tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+          selectionOptions.filter.c_str(), selection.matchedCount, selection.registeredCount,
+          Ansi::ANSI_RESET
+      );
+    }
+  }
+
+  if (selectionOptions.shard) {
+    std::printf(
+        "%sShard %d/%d: %zu of %d tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+        selectionOptions.shard->index, selectionOptions.shard->count, selection.tests.size(),
+        selection.matchedCount, Ansi::ANSI_RESET
     );
   }
 

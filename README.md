@@ -111,7 +111,7 @@ repainted mid-capture.
 #include "cimmerian/test.hpp"
 
 int main(int argc, char* argv[]) {
-  Cimmerian::TestModeRegistry::GetInstance().ParseArgs(argc, argv); // --forbid-only / --forbid-skip
+  Cimmerian::ParseArgs(argc, argv); // --filter, --list, --shard, --forbid-only, ...
   Cimmerian::TestRunner runner;
   auto summary = runner.RunAll(&Cimmerian::TestRegistry::GetInstance());
   return summary.failed > 0 ? 1 : 0;
@@ -292,9 +292,8 @@ counts each one as a failure, so the process exits non-zero:
 ```
 
 The provided entry point (`cimmerian/test-entry-point.hpp`) parses both
-flags. A hand-written `main` needs to call
-`Cimmerian::TestModeRegistry::GetInstance().ParseArgs(argc, argv)`, as in
-the Quick Start example.
+flags. A hand-written `main` needs to call `Cimmerian::ParseArgs(argc, argv)`,
+as in the Quick Start example.
 
 ---
 
@@ -470,6 +469,65 @@ Timing is reported per test, per group, for the total suite, and highlights the 
 
 ---
 
+## Picking and Sharding Tests
+
+```bash
+./build/my_tests --filter "Parser > handles"   # run only the tests whose name contains this
+./build/my_tests --list                        # print the tests a run would run, one per line
+./build/my_tests --shard 2/4                   # run the 2nd of 4 slices of the suite
+```
+
+| Flag | Effect |
+|---|---|
+| `--filter <pattern>` | Runs only the tests whose full name contains `pattern`. Case matters. |
+| `--list` | Prints the full name of each test a run with the same flags would run, then exits without running anything. |
+| `--shard <index>/<count>` | Runs the `index`-th of `count` slices, counting from 1. |
+
+`--filter=<pattern>` and `--shard=<index>/<count>` work too. The flags
+combine: `--filter` picks the tests, `--shard` slices what it picked, and
+`_SKIP`/`_ONLY` apply within the slice.
+
+A test's full name is its group path and its name, as `--list` prints it:
+`Parser > Nested > handles commas`. A test outside every `DESCRIBE` is just
+its name. A filter that matches nothing runs nothing and passes, with a
+warning in the summary.
+
+### Running shards in parallel
+
+Run every shard as its own process at the same time, and the suite takes
+about as long as its slowest shard. The shards together run each test exactly
+once:
+
+- Each top-level `DESCRIBE` goes to one shard, with everything nested in it,
+  so its hooks and shared state work as they do in a full run.
+- The groups are spread so each shard has about the same number of tests.
+  Every process works out the same split from the same binary and flags.
+- Each shard's summary and exit code cover only its own tests, so the run
+  passes if every shard exits 0. A shard can end up with no tests; it passes.
+- In a binary that also runs visual tests, they all run in shard 1, so only
+  one process drives the screen.
+- `--update-snapshots` can't be used with `--shard`: parallel shards would
+  write the same snapshot files. Update snapshots in one unsharded run.
+
+CTest can run the shards for you:
+
+```cmake
+enable_testing()
+foreach(shard RANGE 1 8)
+  add_test(NAME my_tests_${shard}of8 COMMAND my_tests --shard ${shard}/8)
+endforeach()
+```
+
+```bash
+ctest --test-dir build -j 8
+```
+
+The provided entry point reads these flags. A hand-written `main` needs to
+call `Cimmerian::ParseArgs(argc, argv)`. A visual runner's
+`VisualTestRunner::ParseArgs` reads them too.
+
+---
+
 ## Project Structure
 
 ```
@@ -477,8 +535,10 @@ Cimmerian/
 ├── include/cimmerian/                  — public headers
 │   ├── test.hpp                        — single include entry point
 │   ├── test-entry-point.hpp            — ready-made main()
+│   ├── test-args.hpp                   — Cimmerian::ParseArgs, for a hand-written main()
 │   ├── test-registry.hpp               — test tree registration
 │   ├── test-runner.hpp                 — execution, timing and failure layout
+│   ├── test-selection.hpp              — --filter, --list and --shard
 │   ├── test-assertions.hpp             — typed assertions and diff output
 │   ├── test-fail-record.hpp            — a failure: file, line, message, detail lines
 │   ├── test-fail-handler-registry.hpp  — where assertions report failures
