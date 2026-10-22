@@ -1,12 +1,11 @@
 #include "cimmerian/snapshot/hash-snapshot-store.hpp"
+#include "cimmerian/snapshot/atomic-file-write.hpp"
 #include "cimmerian/snapshot/snapshot-run-mode.hpp"
-#include <filesystem>
+#include "cimmerian/test-log.hpp"
 #include <fstream>
 #include <sstream>
 
 namespace Cimmerian::Snapshot {
-
-namespace fs = std::filesystem;
 
 std::optional<std::string> HashSnapFile::Find(const std::string& key) const
 {
@@ -17,15 +16,20 @@ std::optional<std::string> HashSnapFile::Find(const std::string& key) const
   return this->entries[it->second].second;
 }
 
-void HashSnapFile::Set(const std::string& key, const std::string& hexHash)
+bool HashSnapFile::Set(const std::string& key, const std::string& hexHash)
 {
   auto it = this->indexByKey.find(key);
   if (it != this->indexByKey.end()) {
-    this->entries[it->second].second = hexHash;
-    return;
+    std::string& storedHash = this->entries[it->second].second;
+    if (storedHash == hexHash) {
+      return false;
+    }
+    storedHash = hexHash;
+    return true;
   }
   this->indexByKey[key] = this->entries.size();
   this->entries.emplace_back(key, hexHash);
+  return true;
 }
 
 HashSnapFile HashSnapFile::Parse(const std::string& fileContents)
@@ -114,19 +118,20 @@ void HashSnapshotStore::Save(const SnapshotKey& key, const std::string& hexHash)
 {
   const std::string path = this->ResolveSnapHashFilePath(key);
   HashSnapFile& file = this->GetOrLoadFile(path);
-  file.Set(SnapshotKeyToString(key), hexHash);
+  if (file.Set(SnapshotKeyToString(key), hexHash)) {
+    this->changedFiles.insert(path);
+  }
 }
 
 void HashSnapshotStore::Flush()
 {
-  for (const auto& [path, file] : this->loadedFiles) {
-    fs::path fsPath(path);
-    if (fsPath.has_parent_path()) {
-      fs::create_directories(fsPath.parent_path());
+  for (const std::string& path : this->changedFiles) {
+    std::string error;
+    if (!WriteFileAtomically(path, this->loadedFiles.at(path).Serialize(), &error)) {
+      TEST_LOG_ERROR("couldn't write snapshot file: {}", error);
     }
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out << file.Serialize();
   }
+  this->changedFiles.clear();
 }
 
 } // namespace Cimmerian::Snapshot

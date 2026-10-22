@@ -62,7 +62,8 @@ set_target_properties(cimmerian PROPERTIES C_EXTENSIONS OFF)
 if(CIMMERIAN_ENABLE_SNAPSHOT_TESTING)
   target_sources(
     cimmerian
-    PRIVATE src/snapshot/snapshot-key.cpp src/snapshot/snapshot-run-mode.cpp
+    PRIVATE src/snapshot/atomic-file-write.cpp
+            src/snapshot/snapshot-key.cpp src/snapshot/snapshot-run-mode.cpp
             src/snapshot/string-snapshot-store.cpp
             src/snapshot/hash-snapshot-store.cpp
             src/snapshot/inline-snapshot-rewriter.cpp)
