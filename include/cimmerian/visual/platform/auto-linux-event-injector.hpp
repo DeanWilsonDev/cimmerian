@@ -34,11 +34,15 @@ public:
   bool IsFunctional() const override;
   bool Probe() override;
   bool IsWindowFocused(void* windowHandle) const override;
+  // X11EventInjector's, until Probe() falls back to uinput. If neither can
+  // inject, both reasons.
+  std::string SetupError() const override;
 
 private:
   X11EventInjector x11Injector;
   std::unique_ptr<LinuxUinputEventInjector> uinputFallback;
   bool usingFallback = false;
+  std::string bothFailed;
 };
 
 } // namespace Cimmerian::Visual

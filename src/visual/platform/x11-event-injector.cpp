@@ -14,13 +14,17 @@ X11EventInjector::X11EventInjector()
 {
   Display* opened = XOpenDisplay(nullptr);
   if (!opened) {
-    throw std::runtime_error("X11EventInjector: unable to open X display (is $DISPLAY set?)");
+    this->functional = false;
+    this->setupError = "X11EventInjector: unable to open X display (is $DISPLAY set?)";
+    return;
   }
 
   int eventBase = 0, errorBase = 0, majorVersion = 0, minorVersion = 0;
   if (!XTestQueryExtension(opened, &eventBase, &errorBase, &majorVersion, &minorVersion)) {
     XCloseDisplay(opened);
-    throw std::runtime_error("X11EventInjector: XTEST extension is not available on this X server");
+    this->functional = false;
+    this->setupError = "X11EventInjector: XTEST extension is not available on this X server";
+    return;
   }
 
   this->display = reinterpret_cast<_XDisplay*>(opened);
@@ -28,6 +32,9 @@ X11EventInjector::X11EventInjector()
 
 bool X11EventInjector::Probe()
 {
+  if (!this->display) {
+    return false;
+  }
   this->functional = this->ProbeInjection();
 
   if (!this->functional) {
@@ -89,7 +96,7 @@ bool X11EventInjector::ProbeInjection()
 
 bool X11EventInjector::IsWindowFocused(void* windowHandle) const
 {
-  if (!windowHandle) {
+  if (!windowHandle || !this->display) {
     return true;
   }
 
@@ -135,6 +142,9 @@ X11EventInjector::~X11EventInjector()
 
 void X11EventInjector::Inject(const UIEvent& event)
 {
+  if (!this->display) {
+    throw std::runtime_error(this->setupError);
+  }
   Display* dpy = reinterpret_cast<Display*>(this->display);
 
   std::visit(

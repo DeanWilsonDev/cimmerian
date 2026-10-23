@@ -12,39 +12,62 @@ bool AutoLinuxEventInjector::Probe()
     return this->uinputFallback->IsFunctional();
   }
 
-  if (this->x11Injector.Probe()) {
+  const std::string x11Error = this->x11Injector.SetupError();
+  if (x11Error.empty() && this->x11Injector.Probe()) {
     return true;
   }
 
-  TEST_LOG_WARN(
-      "AutoLinuxEventInjector: XTEST reports success but doesn't reach the "
-      "real input pipeline on this compositor - falling back to "
-      "LinuxUinputEventInjector (/dev/uinput)."
-  );
+  if (x11Error.empty()) {
+    TEST_LOG_WARN(
+        "AutoLinuxEventInjector: XTEST reports success but doesn't reach the "
+        "real input pipeline on this compositor - falling back to "
+        "LinuxUinputEventInjector (/dev/uinput)."
+    );
+  }
+  else {
+    TEST_LOG_WARN(
+        "AutoLinuxEventInjector: {} - falling back to LinuxUinputEventInjector (/dev/uinput).",
+        x11Error
+    );
+  }
 
-  try {
-    this->uinputFallback = std::make_unique<LinuxUinputEventInjector>();
-    this->usingFallback = true;
-    const bool uinputFunctional = this->uinputFallback->Probe();
-    if (!uinputFunctional) {
+  auto fallback = std::make_unique<LinuxUinputEventInjector>();
+  const std::string uinputError = fallback->SetupError();
+  if (!uinputError.empty()) {
+    if (x11Error.empty()) {
       TEST_LOG_WARN(
-          "AutoLinuxEventInjector: neither XTEST nor the /dev/uinput "
-          "fallback reach the real input pipeline on this session - SEND() "
-          "in visual tests will silently no-op (see "
-          "docs/cimmerian_uinput_no_functional_check_gap.md)."
+          "AutoLinuxEventInjector: uinput fallback unavailable ({}) - staying "
+          "on XTEST despite it being non-functional; SEND() in visual tests "
+          "will silently no-op.",
+          uinputError
       );
     }
-    return uinputFunctional;
-  }
-  catch (const std::exception& ex) {
-    TEST_LOG_WARN(
-        "AutoLinuxEventInjector: uinput fallback unavailable ({}) - staying "
-        "on XTEST despite it being non-functional; SEND() in visual tests "
-        "will silently no-op.",
-        ex.what()
-    );
+    else {
+      this->bothFailed = x11Error + "; and the fallback " + uinputError;
+    }
     return false;
   }
+
+  this->uinputFallback = std::move(fallback);
+  this->usingFallback = true;
+  const bool uinputFunctional = this->uinputFallback->Probe();
+  if (!uinputFunctional) {
+    TEST_LOG_WARN(
+        "AutoLinuxEventInjector: neither XTEST nor the /dev/uinput "
+        "fallback reach the real input pipeline on this session - SEND() "
+        "in visual tests will silently no-op (see "
+        "docs/cimmerian_uinput_no_functional_check_gap.md)."
+    );
+  }
+  return uinputFunctional;
+}
+
+std::string AutoLinuxEventInjector::SetupError() const
+{
+  if (!this->bothFailed.empty()) {
+    return this->bothFailed;
+  }
+  return this->usingFallback ? this->uinputFallback->SetupError() : this->x11Injector.SetupError();
 }
 
 bool AutoLinuxEventInjector::IsFunctional() const
@@ -62,6 +85,9 @@ bool AutoLinuxEventInjector::IsWindowFocused(void* windowHandle) const
 
 void AutoLinuxEventInjector::Inject(const UIEvent& event)
 {
+  if (!this->bothFailed.empty()) {
+    throw std::runtime_error(this->bothFailed);
+  }
   if (this->usingFallback) {
     this->uinputFallback->Inject(event);
   }

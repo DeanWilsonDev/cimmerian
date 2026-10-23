@@ -33,15 +33,16 @@ CGPoint CurrentMouseLocation()
 MacOSEventInjector::MacOSEventInjector()
 {
   if (!AXIsProcessTrusted()) {
-    throw std::runtime_error(
-        "MacOSEventInjector: process is not trusted for Accessibility access; "
-        "grant it in System Settings > Privacy & Security > Accessibility"
-    );
+    this->setupError = "MacOSEventInjector: process is not trusted for Accessibility access; "
+                       "grant it in System Settings > Privacy & Security > Accessibility";
   }
 }
 
 void MacOSEventInjector::Inject(const UIEvent& event)
 {
+  if (!this->setupError.empty()) {
+    throw std::runtime_error(this->setupError);
+  }
   std::visit(
       [](auto&& e) {
         using T = std::decay_t<decltype(e)>;

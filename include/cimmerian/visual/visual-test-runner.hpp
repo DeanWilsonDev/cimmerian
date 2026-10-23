@@ -1,8 +1,11 @@
 #pragma once
 
+#include <cstdio>
 #include <memory>
+#include <source_location>
 #include <string>
 #include <vector>
+#include "cimmerian/i-test-fail-handler.hpp"
 #include "i-event-injector.hpp"
 #include "i-screen-capture.hpp"
 #include "image-diff.hpp"
@@ -41,10 +44,23 @@ struct VisualSnapshotReportEntry {
   std::string diffPath;
 };
 
-class VisualTestRunner {
+// While a visual test runs, this is the fail handler, so an ASSERT_* in its
+// body, a snapshot that differs from its golden and an exception that escapes
+// it all fail that test, and each prints under its [FAIL] line in the unit
+// runner's layout.
+class VisualTestRunner : public ITestFailHandler {
 public:
   VisualTestRunner();
-  ~VisualTestRunner() = default;
+  // Hands GetActive() back to the runner that was active before this one.
+  ~VisualTestRunner() override;
+
+  VisualTestRunner(const VisualTestRunner&) = delete;
+  VisualTestRunner& operator=(const VisualTestRunner&) = delete;
+
+  void OnTestFail(const TestFailRecord& failure) override;
+
+  // Where the run's report goes: stdout unless set.
+  void SetOutput(std::FILE* stream) { this->output = stream; }
 
   void SetMode(VisualRunMode mode) { this->mode = mode; }
   VisualRunMode GetMode() const { return this->mode; }
@@ -64,14 +80,25 @@ public:
   void RunOne(const VisualTestGroup* group, const VisualTestCase* test, VisualTestRunSummary* summary);
 
   // Called by SEND / WAIT / ASSERT_SNAPSHOT macros while a visual test runs.
-  void SendEvent(const UIEvent& event);
-  void AssertSnapshot(const std::string& label, const DiffOptions& options = {});
+  // where defaults to the macro's call site, for the failure's file and line.
+  void
+  SendEvent(const UIEvent& event, std::source_location where = std::source_location::current());
+  void AssertSnapshot(
+      const std::string& label,
+      const DiffOptions& options = {},
+      std::source_location where = std::source_location::current()
+  );
 
   // Overload for VISUAL_DESCRIBE_COMPONENT groups (no window handle at
   // registration time): captures windowHandle directly instead of the
   // current group's handle. See docs/
   // cimmerian_navigation_without_platform_input_proposal.md Proposal B.
-  void AssertSnapshot(const std::string& label, void* windowHandle, const DiffOptions& options = {});
+  void AssertSnapshot(
+      const std::string& label,
+      void* windowHandle,
+      const DiffOptions& options = {},
+      std::source_location where = std::source_location::current()
+  );
 
   static VisualTestRunner* GetActive() { return activeInstance; }
 
@@ -92,6 +119,10 @@ private:
   const char* currentTestName = nullptr;
   void* currentWindowHandle = nullptr;
   bool currentTestFailed = false;
+  bool inTest = false;
+  std::vector<TestFailRecord> pendingFailures;
+  std::FILE* output = stdout;
+  VisualTestRunner* previousActive = nullptr;
 
   std::vector<VisualSnapshotReportEntry> reportEntries;
 
@@ -102,7 +133,12 @@ private:
   bool MatchesFilter(const std::string& fullyQualifiedName) const;
   void ListTests(const VisualTestGroup* group) const;
   void WriteReport(VisualTestRunSummary* summary) const;
-  void AssertSnapshotAgainst(const std::string& label, void* windowHandle, const DiffOptions& options);
+  void AssertSnapshotAgainst(
+      const std::string& label,
+      void* windowHandle,
+      const DiffOptions& options,
+      const std::source_location& where
+  );
 };
 
 } // namespace Cimmerian::Visual

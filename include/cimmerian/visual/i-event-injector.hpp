@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include "ui-event.hpp"
 
 namespace Cimmerian::Visual {
@@ -10,9 +11,16 @@ public:
   virtual ~IEventInjector() = default;
   virtual void Inject(const UIEvent& event) = 0;
 
+  // Why this injector can't inject at all, such as no X display or no
+  // Accessibility permission, or empty if it can. A backend reports this
+  // instead of throwing from its constructor, so a main that builds one
+  // still runs every test: VisualTestRunner::SetInjector warns with it, and
+  // SEND() fails the test that calls it with it.
+  virtual std::string SetupError() const { return {}; }
+
   // Whether this injector's events are actually expected to reach the
   // target. Most platform backends talk to an OS-level input API that either
-  // works or throws at construction, so the default is true. X11EventInjector
+  // works or reports a SetupError(), so the default is true. X11EventInjector
   // overrides this: XTEST can report success while a Wayland compositor
   // silently drops the synthesized input (see
   // docs/cimmerian_wayland_xtest_injection_gap.md), so it runs a self-check

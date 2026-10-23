@@ -1,10 +1,10 @@
 #include "cimmerian/test-timings.hpp"
 #include "cimmerian/test.hpp"
+#include "support/scratch-dir.hpp"
 #include "support/scratch-run.hpp"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <random>
 #include <string>
 #include <thread>
 #include <vector>
@@ -17,29 +17,7 @@ using Cimmerian::GroupTiming;
 using Cimmerian::TestMode;
 using Cimmerian::TestRegistry;
 
-// A directory of its own under the system temp directory, removed with
-// everything in it when this goes out of scope.
-struct ScratchDir {
-  ScratchDir()
-  {
-    std::random_device random;
-    const fs::path temp = fs::temp_directory_path();
-    do {
-      this->path = temp / ("cimmerian-timings-" + std::to_string(random()));
-    } while (!fs::create_directory(this->path));
-  }
-
-  ~ScratchDir()
-  {
-    std::error_code ignored;
-    fs::remove_all(this->path, ignored);
-  }
-
-  ScratchDir(const ScratchDir&) = delete;
-  ScratchDir& operator=(const ScratchDir&) = delete;
-
-  fs::path path;
-};
+using ScratchDir = CimmerianTestSupport::ScratchDir;
 
 void WriteFile(const fs::path& path, const std::string& contents)
 {

@@ -33,6 +33,8 @@ public:
 
   void Inject(const UIEvent& event) override;
   bool IsFunctional() const override { return this->functional; }
+  // No X display, or no XTEST on it.
+  std::string SetupError() const override { return this->setupError; }
 
   // Moves the real system cursor to probe whether XTEST actually reaches the
   // input pipeline, restoring the original position afterward, and updates
@@ -47,12 +49,13 @@ public:
 private:
   _XDisplay* display;
   bool functional;
+  std::string setupError;
 
   // Moves the pointer via XTEST and checks whether it actually moved,
-  // restoring the original position afterward. Throws only for setup
-  // failures (no display, no XTEST) — a non-functional result is reported
-  // via IsFunctional(), not an exception, since XTEST-present-but-inert is a
-  // usable (if degraded) state a caller may want to detect and act on.
+  // restoring the original position afterward. Only called with a display.
+  // A non-functional result is reported via IsFunctional(), not an
+  // exception, since XTEST-present-but-inert is a usable (if degraded) state
+  // a caller may want to detect and act on.
   bool ProbeInjection();
 };
 

@@ -79,12 +79,22 @@ LinuxUinputEventInjector::LinuxUinputEventInjector(int width, int height)
 {
   DetectScreenSize(this->screenWidth, this->screenHeight);
 
+  const auto fail = [this](const char* reason) {
+    if (this->fd >= 0) {
+      close(this->fd);
+    }
+    this->fd = -1;
+    this->functional = false;
+    this->setupError = reason;
+  };
+
   this->fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
   if (this->fd < 0) {
-    throw std::runtime_error(
+    fail(
         "LinuxUinputEventInjector: unable to open /dev/uinput (need root, or "
         "a udev rule granting the `input` group write access)"
     );
+    return;
   }
 
   ioctl(this->fd, UI_SET_EVBIT, EV_KEY);
@@ -114,8 +124,8 @@ LinuxUinputEventInjector::LinuxUinputEventInjector(int width, int height)
   std::strncpy(setup.name, "Cimmerian Virtual Input", sizeof(setup.name) - 1);
 
   if (ioctl(this->fd, UI_DEV_SETUP, &setup) < 0) {
-    close(this->fd);
-    throw std::runtime_error("LinuxUinputEventInjector: UI_DEV_SETUP failed");
+    fail("LinuxUinputEventInjector: UI_DEV_SETUP failed");
+    return;
   }
 
   struct uinput_abs_setup absX {};
@@ -123,8 +133,8 @@ LinuxUinputEventInjector::LinuxUinputEventInjector(int width, int height)
   absX.absinfo.minimum = 0;
   absX.absinfo.maximum = this->screenWidth > 0 ? this->screenWidth - 1 : 0;
   if (ioctl(this->fd, UI_ABS_SETUP, &absX) < 0) {
-    close(this->fd);
-    throw std::runtime_error("LinuxUinputEventInjector: UI_ABS_SETUP (X) failed");
+    fail("LinuxUinputEventInjector: UI_ABS_SETUP (X) failed");
+    return;
   }
 
   struct uinput_abs_setup absY {};
@@ -132,13 +142,13 @@ LinuxUinputEventInjector::LinuxUinputEventInjector(int width, int height)
   absY.absinfo.minimum = 0;
   absY.absinfo.maximum = this->screenHeight > 0 ? this->screenHeight - 1 : 0;
   if (ioctl(this->fd, UI_ABS_SETUP, &absY) < 0) {
-    close(this->fd);
-    throw std::runtime_error("LinuxUinputEventInjector: UI_ABS_SETUP (Y) failed");
+    fail("LinuxUinputEventInjector: UI_ABS_SETUP (Y) failed");
+    return;
   }
 
   if (ioctl(this->fd, UI_DEV_CREATE) < 0) {
-    close(this->fd);
-    throw std::runtime_error("LinuxUinputEventInjector: UI_DEV_CREATE failed");
+    fail("LinuxUinputEventInjector: UI_DEV_CREATE failed");
+    return;
   }
 
   // The compositor/libinput needs a moment to enumerate the new device
@@ -157,6 +167,9 @@ LinuxUinputEventInjector::~LinuxUinputEventInjector()
 
 bool LinuxUinputEventInjector::Probe()
 {
+  if (this->fd < 0) {
+    return false;
+  }
 #if defined(CIMMERIAN_UINPUT_HAVE_X11)
   Display* dpy = XOpenDisplay(nullptr);
   if (!dpy) {
@@ -254,6 +267,9 @@ void LinuxUinputEventInjector::SyncReport()
 
 void LinuxUinputEventInjector::Inject(const UIEvent& event)
 {
+  if (this->fd < 0) {
+    throw std::runtime_error(this->setupError);
+  }
   std::visit(
       [this](auto&& e) {
         using T = std::decay_t<decltype(e)>;

@@ -61,6 +61,10 @@ struct TestRunSummary {
   int inlineRewriteCount = 0;
 };
 
+// Prints one failure the way a runner lays it out under a [FAIL] line: the
+// message, its detail lines indented under it, then "at file:line".
+void PrintFailureBlock(std::FILE* output, const TestFailRecord& failure);
+
 class TestRunner : public ITestFailHandler {
 public:
   TestRunner();

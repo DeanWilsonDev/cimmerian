@@ -10,7 +10,9 @@
 #include <string_view>
 #include <thread>
 #include "cimmerian/snapshot/snapshot-run-mode.hpp"
+#include "cimmerian/test-fail-handler-registry.hpp"
 #include "cimmerian/test-log.hpp"
+#include "cimmerian/test-runner.hpp"
 #include "cimmerian/test-mode.hpp"
 #include "cimmerian/test-selection.hpp"
 
@@ -88,6 +90,10 @@ std::string HtmlEscape(const std::string& text)
   return out;
 }
 
+// Thrown by SEND() after it has reported why it can't inject, to end the
+// test without a second failure. RunOne catches it.
+struct AbortVisualTest {};
+
 void CollectForbiddenTests(const VisualTestGroup* group, std::vector<std::string>* forbiddenTests)
 {
   const TestModeRegistry& modes = TestModeRegistry::GetInstance();
@@ -110,7 +116,32 @@ void CollectForbiddenTests(const VisualTestGroup* group, std::vector<std::string
 VisualTestRunner::VisualTestRunner()
     : store(std::make_unique<SnapshotStore>(this->snapshotRoot))
 {
+  this->previousActive = activeInstance;
   activeInstance = this;
+}
+
+VisualTestRunner::~VisualTestRunner()
+{
+  if (activeInstance == this) {
+    activeInstance = this->previousActive;
+  }
+}
+
+void VisualTestRunner::OnTestFail(const TestFailRecord& failure)
+{
+  if (!this->inTest) {
+    std::fprintf(
+        stderr, "%s" TAG_ERROR "%s:%d: visual test failure outside of a running test: %s%s\n",
+        Ansi::ANSI_COLOR_BRIGHT_RED, failure.file.c_str(), failure.line, failure.message.c_str(),
+        Ansi::ANSI_RESET
+    );
+    for (const std::string& detailLine : failure.details) {
+      std::fprintf(stderr, "    %s\n", detailLine.c_str());
+    }
+    return;
+  }
+  this->currentTestFailed = true;
+  this->pendingFailures.push_back(failure);
 }
 
 void VisualTestRunner::SetSnapshotRoot(const std::string& root)
@@ -127,12 +158,25 @@ void VisualTestRunner::SetCapture(std::shared_ptr<IScreenCapture> newCapture)
 
 void VisualTestRunner::SetInjector(std::shared_ptr<IEventInjector> newInjector)
 {
-  if (newInjector && !newInjector->Probe()) {
-    TEST_LOG_WARN(
-        "VisualTestRunner: registered IEventInjector reports it is not "
-        "functional - SEND() in visual tests will silently no-op instead of "
-        "actually driving the UI, which can produce false passes."
-    );
+  if (newInjector) {
+    const bool functional = newInjector->Probe();
+    const std::string setupError = newInjector->SetupError();
+    if (!setupError.empty()) {
+      Log::TestLogPrintTo(
+          this->output, Log::LogColor::Yellow,
+          TAG_WARN "VisualTestRunner: {}. Visual tests that SEND() events will fail; the others "
+                   "still run.",
+          setupError
+      );
+    }
+    else if (!functional) {
+      Log::TestLogPrintTo(
+          this->output, Log::LogColor::Yellow,
+          TAG_WARN "VisualTestRunner: registered IEventInjector reports it is not functional - "
+                   "SEND() in visual tests will silently no-op instead of actually driving the "
+                   "UI, which can produce false passes."
+      );
+    }
   }
   this->injector = newInjector;
   ActiveEventInjector::GetInstance().Set(newInjector);
@@ -180,7 +224,7 @@ void VisualTestRunner::ListTests(const VisualTestGroup* group) const
     const std::string fullName = JoinTestName(groupPath, test.GetName());
     if (this->MatchesFilter(fullName) &&
         TestModeRegistry::GetInstance().ShouldRun(test.GetMode())) {
-      std::printf("%s\n", fullName.c_str());
+      std::fprintf(this->output, "%s\n", fullName.c_str());
     }
   }
   for (std::size_t i = 0; i < group->GetChildCount(); ++i) {
@@ -188,48 +232,77 @@ void VisualTestRunner::ListTests(const VisualTestGroup* group) const
   }
 }
 
-void VisualTestRunner::SendEvent(const UIEvent& event)
+void VisualTestRunner::SendEvent(const UIEvent& event, std::source_location where)
 {
   if (const WaitEvent* wait = std::get_if<WaitEvent>(&event)) {
     std::this_thread::sleep_for(wait->duration);
     return;
   }
 
+  // An event that can't be sent would leave the test asserting against
+  // whatever the UI already showed, so the test fails here instead.
   IEventInjector* activeInjector = ActiveEventInjector::GetInstance().Get();
-  if (!activeInjector) {
-    TEST_LOG_ERROR("SEND: no IEventInjector registered (call VisualTestRunner::SetInjector first)");
+  const std::string unavailable =
+      activeInjector ? activeInjector->SetupError()
+                     : "no IEventInjector is registered (call VisualTestRunner::SetInjector first)";
+  if (!unavailable.empty()) {
+    TestFailHandlerRegistry::GetInstance().NotifyTestFail(
+        {.file = where.file_name(),
+         .line = static_cast<int>(where.line()),
+         .message = "SEND() can't inject events:",
+         .details = SplitLines(unavailable)}
+    );
+    if (this->inTest) {
+      throw AbortVisualTest{};
+    }
     return;
   }
   if (!activeInjector->IsFunctional()) {
-    TEST_LOG_ERROR(
-        "SEND: active IEventInjector reports it is not functional - this "
-        "event is likely a no-op and any following ASSERT_SNAPSHOT may pass "
-        "against pre-existing UI state rather than the intended interaction"
+    Log::TestLogPrintTo(
+        this->output, Log::LogColor::Red,
+        TAG_ERROR "SEND: active IEventInjector reports it is not functional - this "
+                  "event is likely a no-op and any following ASSERT_SNAPSHOT may pass "
+                  "against pre-existing UI state rather than the intended interaction"
     );
   }
   if (this->currentWindowHandle && !activeInjector->IsWindowFocused(this->currentWindowHandle)) {
-    TEST_LOG_WARN(
-        "SEND: target window does not currently have OS input focus - both "
-        "provided Linux backends inject real, screen-absolute OS input with "
-        "no concept of 'target window', so this event may land in a "
-        "different window if focus shifted since the test started (see "
-        "docs/cimmerian_live_app_visual_testing_gap.md gap 4)"
+    Log::TestLogPrintTo(
+        this->output, Log::LogColor::Yellow,
+        TAG_WARN "SEND: target window does not currently have OS input focus - both "
+                 "provided Linux backends inject real, screen-absolute OS input with "
+                 "no concept of 'target window', so this event may land in a "
+                 "different window if focus shifted since the test started (see "
+                 "docs/cimmerian_live_app_visual_testing_gap.md gap 4)"
     );
   }
   activeInjector->Inject(event);
 }
 
-void VisualTestRunner::AssertSnapshot(const std::string& label, const DiffOptions& options)
+void VisualTestRunner::AssertSnapshot(
+    const std::string& label,
+    const DiffOptions& options,
+    std::source_location where
+)
 {
-  this->AssertSnapshotAgainst(label, this->currentWindowHandle, options);
+  this->AssertSnapshotAgainst(label, this->currentWindowHandle, options, where);
 }
 
-void VisualTestRunner::AssertSnapshot(const std::string& label, void* windowHandle, const DiffOptions& options)
+void VisualTestRunner::AssertSnapshot(
+    const std::string& label,
+    void* windowHandle,
+    const DiffOptions& options,
+    std::source_location where
+)
 {
-  this->AssertSnapshotAgainst(label, windowHandle, options);
+  this->AssertSnapshotAgainst(label, windowHandle, options, where);
 }
 
-void VisualTestRunner::AssertSnapshotAgainst(const std::string& label, void* windowHandle, const DiffOptions& options)
+void VisualTestRunner::AssertSnapshotAgainst(
+    const std::string& label,
+    void* windowHandle,
+    const DiffOptions& options,
+    const std::source_location& where
+)
 {
   const std::string groupName = this->currentGroupPath;
   const std::string testName = this->currentTestName ? this->currentTestName : "";
@@ -280,12 +353,23 @@ void VisualTestRunner::AssertSnapshotAgainst(const std::string& label, void* win
   else {
     actual.SavePNG(entry.actualPath);
     diff.diffImage.SavePNG(entry.diffPath);
-    this->currentTestFailed = true;
 
-    if (this->mode != VisualRunMode::Review) {
-      TEST_LOG_ERROR(
-          "[FAIL] {} > {} snapshot '{}': {:.2f}% different (actual: {}, diff: {})", groupName, testName,
-          label, diff.differencePercent, entry.actualPath, entry.diffPath
+    // Review mode shows mismatches in its report instead of failing tests.
+    if (this->mode == VisualRunMode::Verify) {
+      TestFailHandlerRegistry::GetInstance().NotifyTestFail(
+          {.file = where.file_name(),
+           .line = static_cast<int>(where.line()),
+           .message = std::format(
+               "Snapshot '{}' differs from its golden in {:.2f}% of pixels (allowed {:.2f}%):",
+               label, diff.differencePercent, options.maxDifferencePercent
+           ),
+           .details = {
+               "Golden  " + entry.goldenPath,
+               "Actual  " + entry.actualPath,
+               "Diff    " + entry.diffPath,
+               "",
+               "Run with --update-snapshots to accept the new image.",
+           }}
       );
     }
   }
@@ -305,7 +389,9 @@ void VisualTestRunner::RunOne(const VisualTestGroup* group, const VisualTestCase
   if (test->GetMode() == TestMode::Skip) {
     summary->total++;
     summary->skipped++;
-    TEST_LOG_PRINT(Log::LogColor::Yellow, "[SKIP] [{}] {}", groupPath, test->GetName());
+    Log::TestLogPrintTo(
+        this->output, Log::LogColor::Yellow, "[SKIP] [{}] {}", groupPath, test->GetName()
+    );
     return;
   }
 
@@ -319,25 +405,44 @@ void VisualTestRunner::RunOne(const VisualTestGroup* group, const VisualTestCase
   this->currentTestName = test->GetName();
   this->currentWindowHandle = group->GetWindowHandle();
   this->currentTestFailed = false;
+  this->pendingFailures.clear();
 
   const std::size_t entriesBefore = this->reportEntries.size();
 
+  TestFailHandlerRegistry& handlers = TestFailHandlerRegistry::GetInstance();
+  ITestFailHandler* const previousHandler = handlers.GetHandler();
+  handlers.RegisterHandler(this);
+  this->inTest = true;
+
   // A crash ends the process without flushing stdio, so print everything so
   // far first, and say where a crash would be.
-  std::fflush(stdout);
+  std::fflush(this->output);
   SetCrashContext(std::format("[{}] {}", groupPath, test->GetName()));
   try {
     test->Run();
   }
-  catch (const std::exception& ex) {
-    this->currentTestFailed = true;
-    TEST_LOG_ERROR("[{}] {} threw: {}", groupPath, test->GetName(), ex.what());
+  catch (const AbortVisualTest&) {
+  }
+  catch (const std::exception& exception) {
+    this->OnTestFail(
+        {.file = "",
+         .line = 0,
+         .message = "The test threw an exception:",
+         .details = SplitLines(exception.what())}
+    );
   }
   catch (...) {
-    this->currentTestFailed = true;
-    TEST_LOG_ERROR("[{}] {} threw an unknown exception", groupPath, test->GetName());
+    this->OnTestFail(
+        {.file = "",
+         .line = 0,
+         .message = "The test threw something that isn't a std::exception",
+         .details = {}}
+    );
   }
   SetCrashContext("");
+
+  this->inTest = false;
+  handlers.RegisterHandler(previousHandler);
 
   summary->total++;
   bool anyMissing = false;
@@ -351,17 +456,31 @@ void VisualTestRunner::RunOne(const VisualTestGroup* group, const VisualTestCase
     }
   }
 
-  if (this->mode == VisualRunMode::Verify && this->currentTestFailed) {
+  // Every mode fails a test that failed an assertion or threw. Only Verify
+  // mode records a snapshot mismatch as a failure.
+  if (this->currentTestFailed) {
     summary->failed++;
-    TEST_LOG_PRINT(Log::LogColor::Red, "[FAIL] [{}] {}", groupPath, test->GetName());
+    Log::TestLogPrintTo(
+        this->output, Log::LogColor::Red, "[FAIL] [{}] {}", groupPath, test->GetName()
+    );
+    for (const TestFailRecord& failure : this->pendingFailures) {
+      PrintFailureBlock(this->output, failure);
+    }
+    this->pendingFailures.clear();
+    std::fprintf(this->output, "\n");
   }
   else {
     summary->passed++;
     if (anyMissing) {
-      TEST_LOG_PRINT(Log::LogColor::Yellow, "[NEW]  [{}] {} (golden captured)", groupPath, test->GetName());
+      Log::TestLogPrintTo(
+          this->output, Log::LogColor::Yellow, "[NEW]  [{}] {} (golden captured)", groupPath,
+          test->GetName()
+      );
     }
     else {
-      TEST_LOG_PRINT(Log::LogColor::Green, "[PASS] [{}] {}", groupPath, test->GetName());
+      Log::TestLogPrintTo(
+          this->output, Log::LogColor::Green, "[PASS] [{}] {}", groupPath, test->GetName()
+      );
     }
   }
 }
@@ -388,14 +507,20 @@ VisualTestRunSummary VisualTestRunner::RunAll(const VisualTestRegistry* registry
   this->filterMatchCount = 0;
 
   if (!registry || !registry->GetRootGroup()) {
-    TEST_LOG_ERROR("root VisualTestGroup was unable to be set on default registry");
+    Log::TestLogPrintTo(
+        this->output, Log::LogColor::Red,
+        TAG_ERROR "root VisualTestGroup was unable to be set on default registry"
+    );
     return summary;
   }
 
   // Command-line errors are counted as a failure, like forbidden tests below.
   const TestSelectionOptions& selectionOptions = TestSelectionRegistry::GetInstance().Get();
   if (!selectionOptions.error.empty()) {
-    TEST_LOG_ERROR("{}; not running any visual tests", selectionOptions.error);
+    Log::TestLogPrintTo(
+        this->output, Log::LogColor::Red, TAG_ERROR "{}; not running any visual tests",
+        selectionOptions.error
+    );
     summary.failed = 1;
     return summary;
   }
@@ -411,17 +536,19 @@ VisualTestRunSummary VisualTestRunner::RunAll(const VisualTestRegistry* registry
     return summary;
   }
 
-  std::printf("\n");
-  std::printf("── Visual Regression ──────────────────────────\n");
+  std::fprintf(this->output, "\n");
+  std::fprintf(this->output, "── Visual Regression ──────────────────────────\n");
 
   std::vector<std::string> forbiddenTests;
   CollectForbiddenTests(registry->GetRootGroup(), &forbiddenTests);
   if (!forbiddenTests.empty()) {
-    TEST_LOG_ERROR(
-        "{} forbidden visual test(s) found, not running any visual tests:", forbiddenTests.size()
+    Log::TestLogPrintTo(
+        this->output, Log::LogColor::Red,
+        TAG_ERROR "{} forbidden visual test(s) found, not running any visual tests:",
+        forbiddenTests.size()
     );
     for (const std::string& forbiddenTest : forbiddenTests) {
-      TEST_LOG_PRINT(Log::LogColor::Red, "  {}", forbiddenTest);
+      Log::TestLogPrintTo(this->output, Log::LogColor::Red, "  {}", forbiddenTest);
     }
     // Counted as failures so entry points that exit on summary.failed fail the run.
     summary.failed = static_cast<int>(forbiddenTests.size());
@@ -429,34 +556,37 @@ VisualTestRunSummary VisualTestRunner::RunAll(const VisualTestRegistry* registry
   }
 
   if (!runsInThisShard) {
-    std::printf(
-        "Shard %d/%d runs no visual tests; they all run in shard 1/%d\n",
+    std::fprintf(
+        this->output, "Shard %d/%d runs no visual tests; they all run in shard 1/%d\n",
         selectionOptions.shard->index, selectionOptions.shard->count, selectionOptions.shard->count
     );
-    std::printf("────────────────────────────────────────────────\n");
+    std::fprintf(this->output, "────────────────────────────────────────────────\n");
     return summary;
   }
 
   const CrashReportScope crashReport;
   this->RunGroup(registry->GetRootGroup(), &summary);
 
-  std::printf(
-      "\nVisual Summary: %d total, %d passed, %d failed, %d updated, %d missing", summary.total,
-      summary.passed, summary.failed, summary.updatedGoldens, summary.missingGoldens
+  std::fprintf(
+      this->output, "\nVisual Summary: %d total, %d passed, %d failed, %d updated, %d missing",
+      summary.total, summary.passed, summary.failed, summary.updatedGoldens, summary.missingGoldens
   );
   if (summary.skipped > 0) {
-    std::printf(", %d skipped", summary.skipped);
+    std::fprintf(this->output, ", %d skipped", summary.skipped);
   }
-  std::printf("\n");
+  std::fprintf(this->output, "\n");
   if (!this->GetEffectiveFilter().empty() && this->filterMatchCount == 0) {
-    TEST_LOG_PRINT(
-        Log::LogColor::Yellow, "--filter \"{}\" matched no visual tests", this->GetEffectiveFilter()
+    Log::TestLogPrintTo(
+        this->output, Log::LogColor::Yellow, "--filter \"{}\" matched no visual tests",
+        this->GetEffectiveFilter()
     );
   }
   if (selectionOptions.shard) {
-    std::printf("Shard 1/%d runs every visual test\n", selectionOptions.shard->count);
+    std::fprintf(
+        this->output, "Shard 1/%d runs every visual test\n", selectionOptions.shard->count
+    );
   }
-  std::printf("────────────────────────────────────────────────\n");
+  std::fprintf(this->output, "────────────────────────────────────────────────\n");
 
   if (this->mode == VisualRunMode::Review) {
     this->WriteReport(&summary);
@@ -522,7 +652,7 @@ void VisualTestRunner::WriteReport(VisualTestRunSummary* summary) const
   out << html.str();
 
   summary->reportPath = reportPath;
-  std::printf("Review report written to %s\n", reportPath.c_str());
+  std::fprintf(this->output, "Review report written to %s\n", reportPath.c_str());
 }
 
 } // namespace Cimmerian::Visual

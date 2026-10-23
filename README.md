@@ -436,6 +436,25 @@ differs, how many indexes differ, and both sizes when they don't match.
             Received  1
 ```
 
+**`ASSERT_SNAPSHOT`** (visual testing)
+```
+[FAIL] [Settings] shows the save button
+
+      Snapshot 'save-button' differs from its golden in 3.20% of pixels (allowed 0.50%):
+
+            Golden  snapshots/settings/shows-the-save-button/save-button.golden.png
+            Actual  snapshots/settings/shows-the-save-button/save-button.actual.png
+            Diff    snapshots/settings/shows-the-save-button/save-button.diff.png
+
+            Run with --update-snapshots to accept the new image.
+
+      at settings.test.cpp:21
+```
+
+A visual test fails the same way on an `ASSERT_*` in its body or an
+exception, in every run mode. With `--review-snapshots`, a differing
+snapshot goes to the HTML report instead of failing its test.
+
 ### When a test throws
 
 An exception that escapes a test body, `BEFORE_EACH` or `AFTER_EACH` fails

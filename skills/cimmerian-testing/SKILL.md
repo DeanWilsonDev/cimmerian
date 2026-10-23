@@ -243,7 +243,10 @@ VISUAL_DESCRIBE("Settings Panel", settingsPanelWindow, {
   assertion; `16ms` ≈ one frame at 60fps.
 - **`ASSERT_SNAPSHOT(label[, windowHandle][, DiffOptions{...}])`** — captures
   and compares a screenshot of the window. `DiffOptions{.maxDifferencePercent
-  = 0.5f}` tolerates minor rendering noise (AA, subpixel text).
+  = 0.5f}` tolerates minor rendering noise (AA, subpixel text). A mismatch
+  prints under the test's `[FAIL]` line with the golden, actual and diff
+  image paths. An `ASSERT_*` in a visual test's body, or an exception, fails
+  that visual test the same way.
 - **`NAVIGATE(screenKey)`** — jumps straight to a screen via a
   consumer-registered `NavigateFn` instead of clicking through the UI with
   `SEND`. **Throws if no `NavigateFn` is registered** — it's opt-in, not a
@@ -283,6 +286,10 @@ subprocess rather than a scratch window built inline in the test.
 - On Linux, XTEST-over-XWayland may not work depending on the compositor;
   `AutoLinuxEventInjector` falls back to the kernel `/dev/uinput` layer
   automatically in that case.
+- An injector that can't work at all (no X display, no XTEST, no
+  `/dev/uinput` access, no macOS Accessibility permission) doesn't throw from
+  its constructor. `SetInjector` warns once with the reason, the visual tests
+  still run, and `SEND()` fails the test that calls it with that reason.
 - Win32/macOS window-lookup and event injection exist but aren't
   compile-tested in every environment — check `docs/next_steps.md` for the
   current state before assuming full parity across platforms.

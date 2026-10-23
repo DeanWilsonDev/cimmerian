@@ -12,7 +12,7 @@ namespace Cimmerian::Visual {
 // Wayland sessions where XTEST-over-XWayland doesn't reach the seat.
 //
 // Requires write access to /dev/uinput (root, or a udev rule granting the
-// `input` group) - the constructor throws if that access isn't available.
+// `input` group) - without it, SetupError() says so and Inject() throws.
 //
 // The kernel accepting the virtual device (constructor success) is not proof
 // the compositor/session actually routes its events to the real seat - some
@@ -56,12 +56,14 @@ public:
   // docs/cimmerian_uinput_no_functional_check_gap.md). Returns the new
   // IsFunctional() value.
   bool Probe() override;
+  std::string SetupError() const override { return this->setupError; }
 
 private:
   int fd;
   int screenWidth;
   int screenHeight;
   bool functional;
+  std::string setupError;
 
   void MoveTo(int x, int y);
   void EmitKey(int code, int value);

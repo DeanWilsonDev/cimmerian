@@ -286,6 +286,9 @@ if(CIMMERIAN_BUILD_TESTS)
   endif()
 
   if(CIMMERIAN_ENABLE_VISUAL_TESTING)
+    # test/visual-runner.test.cpp needs no window: it captures from a fake.
+    list(APPEND _CIMMERIAN_TEST_SOURCES test/visual-runner.test.cpp)
+
     # test/visual.test.cpp needs a real window to screenshot; it gets one from
     # a per-platform scratch-window backend (test/support/scratch-window-*),
     # selected the same way the library's own platform backend is above. Only

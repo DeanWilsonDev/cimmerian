@@ -107,7 +107,7 @@ static std::string ExtractBasename(const std::string& filePath)
   return (lastSlashPosition == std::string::npos) ? filePath : filePath.substr(lastSlashPosition + 1);
 }
 
-static void PrintFailureBlock(std::FILE* output, const TestFailRecord& failure)
+void PrintFailureBlock(std::FILE* output, const TestFailRecord& failure)
 {
   constexpr const char* BLOCK_INDENT  = "      ";
   constexpr const char* DETAIL_INDENT = "            ";
