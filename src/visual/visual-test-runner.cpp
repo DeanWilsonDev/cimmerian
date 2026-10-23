@@ -1,4 +1,5 @@
 #include "cimmerian/visual/visual-test-runner.hpp"
+#include "cimmerian/crash-report.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -321,6 +322,10 @@ void VisualTestRunner::RunOne(const VisualTestGroup* group, const VisualTestCase
 
   const std::size_t entriesBefore = this->reportEntries.size();
 
+  // A crash ends the process without flushing stdio, so print everything so
+  // far first, and say where a crash would be.
+  std::fflush(stdout);
+  SetCrashContext(std::format("[{}] {}", groupPath, test->GetName()));
   try {
     test->Run();
   }
@@ -332,6 +337,7 @@ void VisualTestRunner::RunOne(const VisualTestGroup* group, const VisualTestCase
     this->currentTestFailed = true;
     TEST_LOG_ERROR("[{}] {} threw an unknown exception", groupPath, test->GetName());
   }
+  SetCrashContext("");
 
   summary->total++;
   bool anyMissing = false;
@@ -431,6 +437,7 @@ VisualTestRunSummary VisualTestRunner::RunAll(const VisualTestRegistry* registry
     return summary;
   }
 
+  const CrashReportScope crashReport;
   this->RunGroup(registry->GetRootGroup(), &summary);
 
   std::printf(

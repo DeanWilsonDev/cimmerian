@@ -49,8 +49,9 @@ option(CIMMERIAN_ENABLE_VISUAL_TESTING
 # atomic-file-write.cpp serves --save-timings as well as snapshot files.
 add_library(
   cimmerian STATIC
-  src/test-group.cpp src/test-registry.cpp src/test-runner.cpp
-  src/test-selection.cpp src/test-timings.cpp src/snapshot/atomic-file-write.cpp)
+  src/crash-report.cpp src/test-group.cpp src/test-registry.cpp
+  src/test-runner.cpp src/test-selection.cpp src/test-timings.cpp
+  src/snapshot/atomic-file-write.cpp)
 
 target_include_directories(
   cimmerian PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -277,8 +278,8 @@ if(CIMMERIAN_BUILD_TESTS)
   enable_language(CXX)
 
   set(_CIMMERIAN_TEST_SOURCES
-      test/test-main.cpp test/example.test.cpp test/group-hooks.test.cpp
-      test/selection.test.cpp test/timings.test.cpp)
+      test/test-main.cpp test/crash-report.test.cpp test/example.test.cpp
+      test/group-hooks.test.cpp test/selection.test.cpp test/timings.test.cpp)
 
   if(CIMMERIAN_ENABLE_SNAPSHOT_TESTING)
     list(APPEND _CIMMERIAN_TEST_SOURCES test/snapshot.test.cpp)

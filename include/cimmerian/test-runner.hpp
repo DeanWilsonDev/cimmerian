@@ -195,6 +195,7 @@ private:
   std::FILE* output = stdout;
   TestRunner* previousActive = nullptr;
   ITestFailHandler* previousHandler = nullptr;
+  std::string previousCrashContext;
 
   // The group whose BEFORE_ALL failed, while its tests are being failed
   // without running; nullptr otherwise.
@@ -209,6 +210,11 @@ private:
   bool IsInScope(const TestCase& test) const;
   bool WillRun(const TestCase& test) const;
   bool WillPrint(const TestCase& test) const;
+
+  // Starts one stage: test's body when hookName is null, otherwise the named
+  // hook, for test or, with no test, for the whole group. Sets what a crash
+  // in it is reported as.
+  void EnterStage(const TestGroup* group, const TestCase* test, const char* hookName);
 
   // Runs a group's BEFORE_ALL or AFTER_ALL and reports any failure under its
   // own [FAIL] line. Returns false if the hook failed.

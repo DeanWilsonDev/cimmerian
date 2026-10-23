@@ -443,9 +443,29 @@ that test, and the run carries on. `what()` becomes the detail. A throwing
 ```
 
 An exception escaping `BEFORE_ALL` or `AFTER_ALL` fails that hook, as
-described under [Lifecycle hooks](#lifecycle-hooks). A memory fault, such as an
-out-of-bounds read, still ends the whole run. Use `REQUIRE_*` to stop a test
-before it reads past a failed check.
+described under [Lifecycle hooks](#lifecycle-hooks).
+
+### When a test crashes
+
+A memory fault, such as an out-of-bounds read, still ends the whole run, but
+first the runner writes a line to stderr naming what was running:
+
+```
+[PASS] [Parser] handles commas  (0.0094ms)
+
+[CRASH] SIGSEGV (invalid memory access) in [Parser > Nested] handles quotes, in BEFORE_EACH
+```
+
+- It covers SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGTRAP and SIGABRT (a failed
+  `assert`, or an exception that escapes outside any test), in a test body,
+  any hook or a visual test. A stack overflow is reported too.
+- Everything printed before the crash is flushed first, so it isn't lost when
+  the output goes to a pipe or a file.
+- The process then ends with the same signal as before, so a CI job or CTest
+  still sees a crash. A signal handler the host installed before `RunAll` still
+  runs after the line.
+
+Use `REQUIRE_*` to stop a test before it reads past a failed check.
 
 ### Reporting a failure from your own helper
 
@@ -597,6 +617,7 @@ Cimmerian/
 │   ├── test-runner.hpp                 — execution, timing and failure layout
 │   ├── test-selection.hpp              — --filter, --list and --shard
 │   ├── test-timings.hpp                — --save-timings and --timings files
+│   ├── crash-report.hpp                — the [CRASH] line on a fatal signal
 │   ├── test-assertions.hpp             — typed assertions and diff output
 │   ├── test-fail-record.hpp            — a failure: file, line, message, detail lines
 │   ├── test-fail-handler-registry.hpp  — where assertions report failures

@@ -1,6 +1,7 @@
 #include "cimmerian/test-runner.hpp"
 #include "cimmerian/ansi-codes.hpp"
 #include "cimmerian/ansi-text-builder.hpp"
+#include "cimmerian/crash-report.hpp"
 #ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
 #include "cimmerian/snapshot/hash-snapshot-store.hpp"
 #include "cimmerian/snapshot/inline-snapshot-rewriter.hpp"
@@ -34,6 +35,43 @@ void TestRunner::BeginContext(const char* groupName, const char* testName)
 void TestRunner::EndContext()
 {
   this->inTest = false;
+  SetCrashContext("");
+}
+
+// What GetCurrentTest() has always returned inside each hook.
+static const char* HookContextName(const char* hookName)
+{
+  if (std::strcmp(hookName, "BEFORE_EACH") == 0) {
+    return "(before_each)";
+  }
+  if (std::strcmp(hookName, "AFTER_EACH") == 0) {
+    return "(after_each)";
+  }
+  if (std::strcmp(hookName, "BEFORE_ALL") == 0) {
+    return "(before_all)";
+  }
+  return "(after_all)";
+}
+
+void TestRunner::EnterStage(const TestGroup* group, const TestCase* test, const char* hookName)
+{
+  this->BeginContext(group->GetName(), hookName ? HookContextName(hookName) : test->GetName());
+
+  // A crash ends the process without flushing stdio, so print everything so
+  // far before running the stage, and say where a crash would be.
+  std::fflush(this->output);
+  std::string crashContext =
+      this->currentGroupPath.empty() ? std::string() : "[" + this->currentGroupPath + "] ";
+  if (test) {
+    crashContext += test->GetName();
+    if (hookName) {
+      crashContext += std::string(", in ") + hookName;
+    }
+  }
+  else {
+    crashContext += hookName;
+  }
+  SetCrashContext(crashContext);
 }
 
 TestRunner::TestRunner()
@@ -46,6 +84,7 @@ TestRunner::TestRunner()
   TestFailHandlerRegistry& handlers = TestFailHandlerRegistry::GetInstance();
   this->previousHandler = handlers.GetHandler();
   this->previousActive = activeInstance;
+  this->previousCrashContext = GetCrashContext();
   handlers.RegisterHandler(this);
   activeInstance = this;
 }
@@ -59,6 +98,7 @@ TestRunner::~TestRunner()
   if (activeInstance == this) {
     activeInstance = this->previousActive;
   }
+  SetCrashContext(this->previousCrashContext);
 }
 
 static std::string ExtractBasename(const std::string& filePath)
@@ -232,13 +272,13 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
   this->isFailure = false;
   this->currentGroupPath = BuildGroupPath(group);
 
-  this->BeginContext(group->GetName(), "(before_each)");
+  this->EnterStage(group, test, "BEFORE_EACH");
   const bool isSetUp = this->RunContained("BEFORE_EACH", [&] { group->ExecuteBeforeEach(); });
   EndContext();
 
   // A BEFORE_EACH that threw left the test's fixture half set up, so its body
   // doesn't run; AFTER_EACH still does, to tear down what was set up.
-  this->BeginContext(group->GetName(), test->GetName());
+  this->EnterStage(group, test, nullptr);
   auto startTime = std::chrono::high_resolution_clock::now();
   if (isSetUp) {
     this->RunContained("The test", [&] { test->Run(); });
@@ -246,7 +286,7 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
   auto endTime = std::chrono::high_resolution_clock::now();
   EndContext();
 
-  this->BeginContext(group->GetName(), "(after_each)");
+  this->EnterStage(group, test, "AFTER_EACH");
   this->RunContained("AFTER_EACH", [&] { group->ExecuteAfterEach(); });
   EndContext();
 
@@ -286,13 +326,9 @@ bool TestRunner::RunGroupHook(
     TestRunSummary* summary
 )
 {
-  // What GetCurrentTest() has always returned inside these hooks.
-  const char* contextName =
-      (std::strcmp(hookName, "BEFORE_ALL") == 0) ? "(before_all)" : "(after_all)";
-
   this->isFailure = false;
   this->currentGroupPath = BuildGroupPath(group);
-  this->BeginContext(group->GetName(), contextName);
+  this->EnterStage(group, nullptr, hookName);
   this->RunContained(hookName, [&] { (group->*hook)(); });
   this->EndContext();
 
@@ -501,6 +537,9 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
     }
     return summary;
   }
+
+  // Kept to the end, so a crash while printing the summary is reported too.
+  const CrashReportScope crashReport;
 
   auto suiteStartTime = std::chrono::high_resolution_clock::now();
 

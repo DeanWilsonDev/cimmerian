@@ -159,7 +159,10 @@ reported as that test's failure, with `what()` as the detail, and the run
 carries on. A throwing `BEFORE_EACH` skips the test's body but still runs
 `AFTER_EACH`. A memory fault is a different matter: an out-of-bounds read
 still takes the whole run down, which is why a size check that guards an
-index should be a `REQUIRE_*`.
+index should be a `REQUIRE_*`. The run's last line on stderr then names the
+crash and what was running, e.g. `[CRASH] SIGSEGV (invalid memory access) in
+[Parser > Nested] handles quotes, in BEFORE_EACH`, and the process ends with
+that signal.
 
 If `BEFORE_ALL` fails an assertion or throws, every test in its group, nested
 groups included, is reported `[FAIL] ... (not run: BEFORE_ALL failed)` without
