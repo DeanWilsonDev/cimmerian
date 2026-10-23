@@ -380,7 +380,7 @@ than once gets one block per failure.
 ```
 [FAIL] [Inventory] counts stock  (0.0041ms)
 
-      Containers differ:
+      Containers differ in size (expected 4, received 3), first at index 2:
 
             Expected  [1, 2, 3, 4]
             Received  [1, 2, 9, ∅]
@@ -394,7 +394,8 @@ C-style arrays, and any iterable container whose elements implement
 element by element. In the terminal, `Expected` is green and `Received` is
 red, and the parts that differ are highlighted. `∅` marks something
 `Received` is missing, and an element it has but shouldn't is shown struck
-through.
+through. A container's first line says where to look: the first index that
+differs, how many indexes differ, and both sizes when they don't match.
 
 **Scalars**
 ```
@@ -414,10 +415,17 @@ through.
 
 **Containers**
 ```
-      Containers differ:
+      Containers differ in size (expected 2, received 3), first at index 2:
 
             Expected  [1, 2]
             Received  [1, 2, 3]
+```
+
+```
+      Containers differ at 2 indexes, first at index 1:
+
+            Expected  [1, 2, 3, 4]
+            Received  [1, 7, 3, 8]
 ```
 
 **`ASSERT_NEAR`**

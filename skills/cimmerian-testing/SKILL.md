@@ -149,10 +149,13 @@ condition containing a top-level comma, such as
 `ASSERT_TRUE(std::is_same_v<A, B>)`, needs an extra pair of parentheses.
 
 `ASSERT_EQUAL` produces a visual diff on failure (character-level for
-strings, element-level for containers whose elements support
-`std::format`; `∅` marks a missing element, strikethrough marks an extra
-one). Prefer `ASSERT_*` for independent checks in one test, `REQUIRE_*` when
-a later line would be meaningless/unsafe after an earlier check fails.
+strings, element-level for containers whose elements support `std::format`;
+`∅` marks a missing element, strikethrough marks an extra one). A container
+failure's first line names the first index that differs, and both sizes when
+they don't match: `Containers differ in size (expected 2, received 3), first
+at index 2:`. Prefer `ASSERT_*` for independent checks in one test,
+`REQUIRE_*` when a later line would be meaningless/unsafe after an earlier
+check fails.
 
 An exception that escapes a test body, `BEFORE_EACH` or `AFTER_EACH` is
 reported as that test's failure, with `what()` as the detail, and the run

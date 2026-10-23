@@ -109,12 +109,23 @@ FormatStringDiff(const std::string& expectedString, const std::string& actualStr
   return FormatDiff("\"" + expectedFormatted + "\"", "\"" + actualFormatted + "\"");
 }
 
+// Two containers compared element by element: the diff lines, and what a
+// reader would otherwise count brackets to find out.
+struct ContainerComparison {
+  std::vector<std::string> diffLines;
+  std::ptrdiff_t expectedSize = 0;
+  std::ptrdiff_t actualSize = 0;
+  std::ptrdiff_t firstDifference = -1; // the first index that differs, or -1 if none does
+  std::ptrdiff_t differingIndexes = 0; // among the indexes both containers have
+};
+
 template <Iterable ExpectedContainer, Iterable ActualContainer>
-std::vector<std::string> FormatContainerDiff(
+ContainerComparison CompareContainers(
     const ExpectedContainer& expectedContainer,
     const ActualContainer& actualContainer
 )
 {
+  ContainerComparison comparison;
   const auto expectedSize =
       std::distance(std::begin(expectedContainer), std::end(expectedContainer));
   const auto actualSize = std::distance(std::begin(actualContainer), std::end(actualContainer));
@@ -142,6 +153,10 @@ std::vector<std::string> FormatContainerDiff(
       actualFormatted += FormatValue(actualElement);
     }
     else {
+      if (comparison.firstDifference < 0) {
+        comparison.firstDifference = elementIndex;
+      }
+      comparison.differingIndexes++;
       expectedFormatted += Ansi::AnsiFormatter::DiffExpected(FormatValue(expectedElement));
       actualFormatted += Ansi::AnsiFormatter::DiffReceived(FormatValue(actualElement));
     }
@@ -180,7 +195,51 @@ std::vector<std::string> FormatContainerDiff(
   expectedFormatted += "]";
   actualFormatted += "]";
 
-  return FormatDiff(expectedFormatted, actualFormatted);
+  if (comparison.firstDifference < 0 && expectedSize != actualSize) {
+    comparison.firstDifference = commonSize;
+  }
+  comparison.expectedSize = expectedSize;
+  comparison.actualSize = actualSize;
+  comparison.diffLines = FormatDiff(expectedFormatted, actualFormatted);
+  return comparison;
+}
+
+template <Iterable ExpectedContainer, Iterable ActualContainer>
+std::vector<std::string> FormatContainerDiff(
+    const ExpectedContainer& expectedContainer,
+    const ActualContainer& actualContainer
+)
+{
+  return CompareContainers(expectedContainer, actualContainer).diffLines;
+}
+
+// The one-line reason for a failed container comparison, naming the sizes
+// when they differ and the first index that differs:
+//
+//   Containers differ at index 4:
+//   Containers differ at 3 indexes, first at index 4:
+//   Containers differ in size (expected 2, received 3), first at index 2:
+//
+// noun replaces "Containers", as in "Arrays".
+inline std::string
+DescribeContainerDifference(std::string_view noun, const ContainerComparison& comparison)
+{
+  if (comparison.firstDifference < 0) {
+    return std::format("{} differ:", noun);
+  }
+  if (comparison.expectedSize != comparison.actualSize) {
+    return std::format(
+        "{} differ in size (expected {}, received {}), first at index {}:", noun,
+        comparison.expectedSize, comparison.actualSize, comparison.firstDifference
+    );
+  }
+  if (comparison.differingIndexes == 1) {
+    return std::format("{} differ at index {}:", noun, comparison.firstDifference);
+  }
+  return std::format(
+      "{} differ at {} indexes, first at index {}:", noun, comparison.differingIndexes,
+      comparison.firstDifference
+  );
 }
 
 inline void
@@ -265,9 +324,10 @@ bool assert_equal_impl(
       std::equal(std::begin(actualArray), std::end(actualArray), std::begin(expectedArray));
 
   if (!arraysAreEqual) {
+    ContainerComparison comparison = CompareContainers(expectedSpan, actualSpan);
     fail(
-        file, line, actualArraySize != expectedArraySize ? "Array sizes differ:" : "Arrays differ:",
-        FormatContainerDiff(expectedSpan, actualSpan)
+        file, line, DescribeContainerDifference("Arrays", comparison),
+        std::move(comparison.diffLines)
     );
     return false;
   }
@@ -294,7 +354,11 @@ bool assert_equal_impl(
       );
 
   if (!containersAreEqual) {
-    fail(file, line, "Containers differ:", FormatContainerDiff(expectedContainer, actualContainer));
+    ContainerComparison comparison = CompareContainers(expectedContainer, actualContainer);
+    fail(
+        file, line, DescribeContainerDifference("Containers", comparison),
+        std::move(comparison.diffLines)
+    );
     return false;
   }
   return true;

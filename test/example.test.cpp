@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <list>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -229,6 +230,56 @@ DESCRIBE("std::array Equality", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Container failure headlines — the sizes and where they first differ
+// ─────────────────────────────────────────────────────────────────────────────
+
+static std::string ContainerHeadline(const std::vector<int>& actual, const std::vector<int>& expected)
+{
+  auto failure = CAPTURE_FAILURE(ASSERT_EQUAL(actual, expected));
+  return failure ? failure->message : "(no failure)";
+}
+
+DESCRIBE("Container Failure Headlines", {
+  TEST("names the one index that differs", {
+    ASSERT_EQUAL(ContainerHeadline({1, 99, 3}, {1, 2, 3}), "Containers differ at index 1:");
+  });
+
+  TEST("counts the indexes that differ and names the first", {
+    ASSERT_EQUAL(
+      ContainerHeadline({9, 2, 8, 4}, {1, 2, 3, 4}), "Containers differ at 2 indexes, first at index 0:"
+    );
+  });
+
+  TEST("gives both sizes, and the first difference before the shorter one ends", {
+    ASSERT_EQUAL(
+      ContainerHeadline({1, 9, 3}, {1, 2}),
+      "Containers differ in size (expected 2, received 3), first at index 1:"
+    );
+  });
+
+  TEST("puts the first difference where the shorter one ends when the rest matches", {
+    ASSERT_EQUAL(
+      ContainerHeadline({1, 2}, {1, 2, 3}),
+      "Containers differ in size (expected 3, received 2), first at index 2:"
+    );
+  });
+
+  TEST("handles an empty container", {
+    ASSERT_EQUAL(
+      ContainerHeadline({}, {5}), "Containers differ in size (expected 1, received 0), first at index 0:"
+    );
+  });
+
+  TEST("says the same for a container that isn't a vector", {
+    const std::list<int> actual   = {1, 2, 4};
+    const std::list<int> expected = {1, 2, 3};
+    auto failure = CAPTURE_FAILURE(ASSERT_EQUAL(actual, expected));
+    REQUIRE_TRUE(failure.has_value());
+    ASSERT_EQUAL(failure->message, "Containers differ at index 2:");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Failure records — what a handler receives
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -238,7 +289,7 @@ DESCRIBE("Failure Records", {
     std::vector<int> expected = {1, 2};
     auto failure = CAPTURE_FAILURE(ASSERT_EQUAL(actual, expected));
     REQUIRE_TRUE(failure.has_value());
-    ASSERT_EQUAL(failure->message, "Containers differ:");
+    ASSERT_EQUAL(failure->message, "Containers differ in size (expected 2, received 3), first at index 2:");
     REQUIRE_EQUAL(failure->details.size(), std::size_t {2});
     ASSERT_EQUAL(Cimmerian::Ansi::AnsiFormatter::StripCodes(failure->details[0]), "Expected  [1, 2]");
     ASSERT_EQUAL(Cimmerian::Ansi::AnsiFormatter::StripCodes(failure->details[1]), "Received  [1, 2, 3]");
@@ -270,7 +321,8 @@ DESCRIBE("Failure Records", {
     REQUIRE_TRUE(message.has_value());
     ASSERT_EQUAL(
       Cimmerian::Ansi::AnsiFormatter::StripCodes(*message),
-      "Containers differ:\nExpected  [1, 2]\nReceived  [1, 2, 3]"
+      "Containers differ in size (expected 2, received 3), first at index 2:\n"
+      "Expected  [1, 2]\nReceived  [1, 2, 3]"
     );
   });
 });

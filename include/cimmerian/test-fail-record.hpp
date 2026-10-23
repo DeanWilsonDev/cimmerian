@@ -8,7 +8,7 @@
 namespace Cimmerian {
 
 // One assertion failure, as handed to an ITestFailHandler. The handler owns
-// layout: message is the one-line reason ("Containers differ:") and each
+// layout: message is the one-line reason ("Values differ:") and each
 // entry in details is one line to lay out under it (an expected/received
 // diff, a list of violations), carrying no indentation of the handler's.
 // file is empty when the failure has no source location, as for an exception

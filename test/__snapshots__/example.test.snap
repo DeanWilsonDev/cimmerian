@@ -24,32 +24,32 @@ Expected  "hello"
 Received  "hello world"
 
 # Snapshot: C-Style Array Equality > array-element-diff
-Arrays differ:
+Arrays differ at index 1:
 Expected  [1, 2, 3]
 Received  [1, 99, 3]
 
 # Snapshot: C-Style Array Equality > array-size-diff
-Array sizes differ:
+Arrays differ in size (expected 2, received 3), first at index 2:
 Expected  [1, 2]
 Received  [1, 2, 3]
 
 # Snapshot: Vector Equality > vector-extra-elements
-Containers differ:
+Containers differ in size (expected 2, received 3), first at index 2:
 Expected  [1, 2]
 Received  [1, 2, 3]
 
 # Snapshot: Vector Equality > vector-missing-elements
-Containers differ:
+Containers differ in size (expected 3, received 2), first at index 2:
 Expected  [1, 2, 3]
 Received  [1, 2, ∅]
 
 # Snapshot: Vector Equality > vector-element-diff
-Containers differ:
+Containers differ at index 1:
 Expected  [1, 2, 3]
 Received  [1, 99, 3]
 
 # Snapshot: std::array Equality > std-array-element-diff
-Containers differ:
+Containers differ at index 1:
 Expected  [7, 8, 9]
 Received  [7, 0, 9]
 
