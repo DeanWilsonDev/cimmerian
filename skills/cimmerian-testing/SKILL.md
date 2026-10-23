@@ -107,6 +107,8 @@ and rebuilding.
 | `--filter <pattern>` | Runs only the tests whose full name contains `pattern` (case-sensitive) |
 | `--list` | Prints the full name of each test a run would run, one per line, and runs nothing |
 | `--shard <index>/<count>` | Runs the `index`-th of `count` slices, counting from 1 |
+| `--save-timings <file>` | After the run, writes each top-level `DESCRIBE`'s time |
+| `--timings <file>` | Balances `--shard` by the times in `file` instead of test counts |
 
 - A full name is the group path plus the test name, as `--list` prints it:
   `Parser > Nested > handles commas`.
@@ -116,6 +118,12 @@ and rebuilding.
   run each test exactly once.
 - `--update-snapshots` can't be combined with `--shard`; update snapshots in
   one unsharded run.
+- Shards balance by test count. When groups differ a lot in time per test,
+  record each top-level group's time with `--save-timings <file>` in an
+  unsharded run, and pass `--timings <file>` to every shard to balance by
+  time. Every shard must read the same file, so a shard can't save over the
+  file it reads. Save each shard to its own file and concatenate them.
+  A missing file falls back to test count; a malformed one stops the run.
 
 ### Assertions
 

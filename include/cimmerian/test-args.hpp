@@ -10,9 +10,9 @@
 namespace Cimmerian {
 
 // Reads every flag the unit runner uses: --debug, --forbid-only,
-// --forbid-skip, --filter, --list and --shard, plus --update-snapshots and
-// --snapshot-dir with snapshot testing. Call it once at the top of main. A
-// visual runner reads its own flags with VisualTestRunner::ParseArgs.
+// --forbid-skip, --filter, --list, --shard, --timings and --save-timings,
+// plus --update-snapshots and --snapshot-dir with snapshot testing. Call it once at the top of
+// main. A visual runner reads its own flags with VisualTestRunner::ParseArgs.
 inline void ParseArgs(int argc, char* argv[])
 {
   CheckDebug(argc, argv);

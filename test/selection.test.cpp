@@ -161,7 +161,7 @@ DESCRIBE("Test Selection", {
       ASSERT_EQUAL(AssignShards({5, 3, 0, 2}, 1), (std::vector<int>{1, 1, 1, 1}));
     });
 
-    TEST("gives each unit, largest first, to the shard with the fewest tests", {
+    TEST("gives each unit, heaviest first, to the shard with the least weight", {
       // 5 -> shard 1; 3 -> shard 2; 3 -> shard 2 (3 < 5); 1 -> shard 1 (5 < 6).
       ASSERT_EQUAL(AssignShards({5, 3, 3, 1}, 2), (std::vector<int>{1, 2, 2, 1}));
     });
@@ -180,10 +180,10 @@ DESCRIBE("Test Selection", {
     });
 
     TEST("gives every unit exactly one shard from 1 to count", {
-      const std::vector<int> counts = {7, 1, 4, 4, 9, 0, 2, 2, 5, 3, 1};
+      const std::vector<long long> weights = {7, 1, 4, 4, 9, 0, 2, 2, 5, 3, 1};
       for (int shardCount = 1; shardCount <= 6; ++shardCount) {
-        const std::vector<int> shards = AssignShards(counts, shardCount);
-        REQUIRE_EQUAL(shards.size(), counts.size());
+        const std::vector<int> shards = AssignShards(weights, shardCount);
+        REQUIRE_EQUAL(shards.size(), weights.size());
         for (const int shard : shards) {
           ASSERT_TRUE(shard >= 1 && shard <= shardCount);
         }
@@ -191,8 +191,54 @@ DESCRIBE("Test Selection", {
     });
 
     TEST("gives the same answer every time", {
-      const std::vector<int> counts = {7, 1, 4, 4, 9, 0, 2, 2, 5, 3, 1};
-      ASSERT_EQUAL(AssignShards(counts, 4), AssignShards(counts, 4));
+      const std::vector<long long> weights = {7, 1, 4, 4, 9, 0, 2, 2, 5, 3, 1};
+      ASSERT_EQUAL(AssignShards(weights, 4), AssignShards(weights, 4));
+    });
+  });
+
+  DESCRIBE("WeighShardUnits", {
+    using Cimmerian::GroupTiming;
+    using Cimmerian::ShardUnit;
+    using Cimmerian::WeighShardUnits;
+
+    TEST("without timings, a unit weighs its test count", {
+      const std::vector<ShardUnit> units = {{"", 1}, {"Parser", 6}, {"Lexer", 3}};
+      ASSERT_EQUAL(WeighShardUnits(units, {}), (std::vector<long long>{1, 6, 3}));
+    });
+
+    TEST("a recorded unit weighs its time, scaled to the tests it runs now", {
+      const std::vector<GroupTiming> timings = {{"Parser", 4, 8000}, {"Lexer", 3, 900}};
+      // Parser ran 4 tests in 8000us and now runs 2; Lexer is unchanged.
+      const std::vector<ShardUnit> units = {{"Parser", 2}, {"Lexer", 3}};
+      ASSERT_EQUAL(WeighShardUnits(units, timings), (std::vector<long long>{4000, 900}));
+    });
+
+    TEST("an unrecorded unit weighs its tests at the mean recorded test time", {
+      // 4000us over 4 recorded tests is 1000us a test.
+      const std::vector<GroupTiming> timings = {{"Parser", 1, 3000}, {"Lexer", 3, 1000}};
+      const std::vector<ShardUnit> units = {{"Writer", 2}, {"", 1}};
+      ASSERT_EQUAL(WeighShardUnits(units, timings), (std::vector<long long>{2000, 1000}));
+    });
+
+    TEST("an unrecorded unit weighs at least 1us a test, even when recorded tests took 0us", {
+      const std::vector<GroupTiming> timings = {{"Parser", 10, 0}};
+      ASSERT_EQUAL(
+          WeighShardUnits({{"Parser", 10}, {"Writer", 3}}, timings), (std::vector<long long>{0, 3})
+      );
+    });
+
+    TEST("a unit with no tests to run weighs nothing", {
+      const std::vector<GroupTiming> timings = {{"Parser", 2, 5000}};
+      ASSERT_EQUAL(
+          WeighShardUnits({{"Parser", 0}, {"Writer", 0}}, timings), (std::vector<long long>{0, 0})
+      );
+    });
+
+    TEST("ignores a recorded group with no tests, falling back to counts if that's all there is", {
+      const std::vector<GroupTiming> timings = {{"Parser", 0, 5000}};
+      ASSERT_EQUAL(
+          WeighShardUnits({{"Parser", 6}, {"Lexer", 3}}, timings), (std::vector<long long>{6, 3})
+      );
     });
   });
 
@@ -301,6 +347,59 @@ DESCRIBE("Test Selection", {
       );
     });
 
+    TEST("balances the shards by recorded time when given timings", {
+      const std::unique_ptr<TestRegistry> registry = MakeRegistry();
+      // Lexer's 3 tests outweigh everything else together, so it gets shard 1
+      // to itself, where by test count Parser would.
+      const std::vector<Cimmerian::GroupTiming> timings =
+          {{"", 1, 100}, {"Parser", 6, 600}, {"Lexer", 3, 900000}, {"Writer", 2, 200}};
+      const auto namesInShard = [&](int index) {
+        std::vector<std::string> names;
+        for (const Cimmerian::SelectedTest& selected :
+             Cimmerian::SelectTests(
+                 registry->GetRootGroup(), "", ShardSpec{.index = index, .count = 2}, IsNotSkipped,
+                 timings
+             )
+                 .tests) {
+          names.push_back(selected.fullName);
+        }
+        return names;
+      };
+      ASSERT_EQUAL(
+          namesInShard(1), (std::vector<std::string>{
+                               "Lexer > splits words",
+                               "Lexer > keeps commas",
+                               "Lexer > skips spaces",
+                           })
+      );
+      ASSERT_EQUAL(namesInShard(2).size(), std::size_t{10});
+    });
+
+    TEST("with timings, the shards together still select each test exactly once", {
+      const std::unique_ptr<TestRegistry> registry = MakeRegistry();
+      // Writer and the loose tests have no recorded time.
+      const std::vector<Cimmerian::GroupTiming> timings =
+          {{"Parser", 3, 50}, {"Lexer", 3, 7000}, {"Gone", 4, 90000}};
+      std::vector<std::string> everyTest = SelectedNames(*registry, "");
+      std::sort(everyTest.begin(), everyTest.end());
+
+      for (int count = 1; count <= 5; ++count) {
+        std::vector<std::string> union_;
+        for (int index = 1; index <= count; ++index) {
+          for (const Cimmerian::SelectedTest& selected :
+               Cimmerian::SelectTests(
+                   registry->GetRootGroup(), "", ShardSpec{.index = index, .count = count},
+                   IsNotSkipped, timings
+               )
+                   .tests) {
+            union_.push_back(selected.fullName);
+          }
+        }
+        std::sort(union_.begin(), union_.end());
+        ASSERT_EQUAL(union_, everyTest);
+      }
+    });
+
     TEST("filters before sharding", {
       const std::unique_ptr<TestRegistry> registry = MakeRegistry();
       // Only Parser and Lexer match, one test each, so two shards take one each.
@@ -379,6 +478,39 @@ DESCRIBE("Test Selection", {
       ASSERT_EQUAL(
           Parse({"--filter"}).error,
           std::string("--filter needs a pattern, as in --filter \"Parser > handles commas\"")
+      );
+    });
+
+    TEST("reads --timings and --save-timings", {
+      const Cimmerian::TestSelectionOptions options =
+          Parse({"--timings", "in.txt", "--save-timings=out.txt", "--shard", "1/2"});
+      ASSERT_EQUAL(options.timingsPath, std::string("in.txt"));
+      ASSERT_EQUAL(options.saveTimingsPath, std::string("out.txt"));
+      ASSERT_EQUAL(options.error, std::string(""));
+    });
+
+    TEST("reports a --timings or --save-timings with nothing after it", {
+      ASSERT_EQUAL(
+          Parse({"--timings"}).error,
+          std::string("--timings needs a file, as in --timings test-timings.txt")
+      );
+      ASSERT_EQUAL(
+          Parse({"--save-timings"}).error,
+          std::string("--save-timings needs a file, as in --save-timings test-timings.txt")
+      );
+    });
+
+    TEST("refuses a sharded run that saves its timings over the file it balances by", {
+      const std::string error =
+          Parse({"--shard", "1/2", "--timings", "t.txt", "--save-timings", "./t.txt"}).error;
+      ASSERT_TRUE(error.starts_with("--save-timings can't write ./t.txt under --shard"));
+    });
+
+    TEST("lets an unsharded run, or a shard saving elsewhere, save timings", {
+      ASSERT_EQUAL(Parse({"--timings", "t.txt", "--save-timings", "t.txt"}).error, std::string(""));
+      ASSERT_EQUAL(
+          Parse({"--shard", "2/2", "--timings", "t.txt", "--save-timings", "t-2.txt"}).error,
+          std::string("")
       );
     });
 

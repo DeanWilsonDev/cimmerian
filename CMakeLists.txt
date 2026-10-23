@@ -46,8 +46,11 @@ option(CIMMERIAN_ENABLE_VISUAL_TESTING
 # -------------------------
 # Library target
 # -------------------------
-add_library(cimmerian STATIC src/test-group.cpp src/test-registry.cpp
-                              src/test-runner.cpp src/test-selection.cpp)
+# atomic-file-write.cpp serves --save-timings as well as snapshot files.
+add_library(
+  cimmerian STATIC
+  src/test-group.cpp src/test-registry.cpp src/test-runner.cpp
+  src/test-selection.cpp src/test-timings.cpp src/snapshot/atomic-file-write.cpp)
 
 target_include_directories(
   cimmerian PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -62,8 +65,7 @@ set_target_properties(cimmerian PROPERTIES C_EXTENSIONS OFF)
 if(CIMMERIAN_ENABLE_SNAPSHOT_TESTING)
   target_sources(
     cimmerian
-    PRIVATE src/snapshot/atomic-file-write.cpp
-            src/snapshot/snapshot-key.cpp src/snapshot/snapshot-run-mode.cpp
+    PRIVATE src/snapshot/snapshot-key.cpp src/snapshot/snapshot-run-mode.cpp
             src/snapshot/string-snapshot-store.cpp
             src/snapshot/hash-snapshot-store.cpp
             src/snapshot/inline-snapshot-rewriter.cpp)
@@ -274,8 +276,9 @@ option(CIMMERIAN_BUILD_TESTS "Build cimmerian tests"
 if(CIMMERIAN_BUILD_TESTS)
   enable_language(CXX)
 
-  set(_CIMMERIAN_TEST_SOURCES test/test-main.cpp test/example.test.cpp
-                              test/group-hooks.test.cpp test/selection.test.cpp)
+  set(_CIMMERIAN_TEST_SOURCES
+      test/test-main.cpp test/example.test.cpp test/group-hooks.test.cpp
+      test/selection.test.cpp test/timings.test.cpp)
 
   if(CIMMERIAN_ENABLE_SNAPSHOT_TESTING)
     list(APPEND _CIMMERIAN_TEST_SOURCES test/snapshot.test.cpp)

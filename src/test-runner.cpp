@@ -12,8 +12,10 @@
 #include "cimmerian/test-log.hpp"
 #include "cimmerian/test-mode.hpp"
 #include "cimmerian/test-selection.hpp"
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <format>
 #include <cstdarg>
 #include <cstring>
 #include <cassert>
@@ -342,16 +344,36 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
   }
   const bool runsTests = this->failedSetupGroup == nullptr;
 
+  // At the root, each top-level group is timed whole for --save-timings, as
+  // are the tests outside every DESCRIBE.
+  const bool isRoot = group->GetParent() == nullptr;
+  const auto recordTiming = [&](const char* groupName, int testCount, auto startTime) {
+    if (isRoot && testCount > 0) {
+      const auto elapsed = std::chrono::high_resolution_clock::now() - startTime;
+      summary->groupTimings.push_back(
+          {.groupName = groupName,
+           .testCount = testCount,
+           .microseconds = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()}
+      );
+    }
+  };
+
   auto groupStartTime = std::chrono::high_resolution_clock::now();
 
   const auto& tests = group->GetTests();
   for (size_t i = 0; i < tests.size(); ++i) {
     this->RunOne(group, &tests[i], summary);
   }
+  recordTiming(
+      "", static_cast<int>(std::count_if(tests.begin(), tests.end(), willRun)), groupStartTime
+  );
 
   for (size_t i = 0; i < group->GetChildCount(); ++i) {
-    this->RunGroup(group->GetChild(i), summary);
-    if (AnyTestInSubtree(group->GetChild(i), willPrint)) {
+    const TestGroup* child = group->GetChild(i);
+    const auto childStartTime = std::chrono::high_resolution_clock::now();
+    this->RunGroup(child, summary);
+    recordTiming(child->GetName(), CountTestsInSubtree(child, willRun), childStartTime);
+    if (AnyTestInSubtree(child, willPrint)) {
       std::fprintf(this->output, "\n");
     }
   }
@@ -432,9 +454,37 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
     return summary;
   }
 
+  // Every shard has to read the same timings, or they split the tests
+  // differently and a test runs twice or not at all. So a file that can't be
+  // read stops the run, rather than quietly falling back to test counts.
+  std::vector<GroupTiming> timings;
+  if (selectionOptions.shard && !selectionOptions.timingsPath.empty()) {
+    LoadedTimings loaded = LoadTimings(selectionOptions.timingsPath);
+    if (!loaded.error.empty()) {
+      TestLogPrintTo(
+          this->output, LogColor::Red,
+          TAG_ERROR "--timings: {}. Not running any tests, since every shard must balance by the "
+                    "same timings",
+          loaded.error
+      );
+      summary.failed = 1;
+      return summary;
+    }
+    timings = std::move(loaded.timings);
+    this->shardBalance =
+        loaded.found
+            ? std::format("balanced by timings in {}", selectionOptions.timingsPath)
+            : std::format(
+                  "balanced by test count, since {} doesn't exist", selectionOptions.timingsPath
+              );
+  }
+
   const TestSelection selection = SelectTests(
       registry->GetRootGroup(), selectionOptions.filter, selectionOptions.shard,
-      [](const TestCase& test) { return TestModeRegistry::GetInstance().ShouldRun(test.GetMode()); }
+      [](const TestCase& test) {
+        return TestModeRegistry::GetInstance().ShouldRun(test.GetMode());
+      },
+      timings
   );
   this->testsInScope.clear();
   for (const SelectedTest& selected : selection.tests) {
@@ -458,6 +508,18 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
 
   auto suiteEndTime = std::chrono::high_resolution_clock::now();
   summary.totalElapsedTime = suiteEndTime - suiteStartTime;
+
+  if (!selectionOptions.saveTimingsPath.empty()) {
+    std::string saveError;
+    this->savedTimingsFailed =
+        !SaveTimings(selectionOptions.saveTimingsPath, summary.groupTimings, &saveError);
+    this->savedTimings = this->savedTimingsFailed
+                             ? std::format("--save-timings: {}", saveError)
+                             : std::format(
+                                   "Saved the times of {} group(s) to {}",
+                                   summary.groupTimings.size(), selectionOptions.saveTimingsPath
+                               );
+  }
 
 #ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
   Snapshot::InlineSnapshotRewriter::GetInstance().FlushAll();
@@ -547,9 +609,18 @@ void TestRunner::PrintSummary(const TestRunSummary& summary, const TestSelection
 
   if (selectionOptions.shard) {
     std::fprintf(
-        output, "%sShard %d/%d: %zu of %d tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+        output, "%sShard %d/%d: %zu of %d tests%s%s%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
         selectionOptions.shard->index, selectionOptions.shard->count, selection.tests.size(),
-        selection.matchedCount, Ansi::ANSI_RESET
+        selection.matchedCount, this->shardBalance.empty() ? "" : ", ", this->shardBalance.c_str(),
+        Ansi::ANSI_RESET
+    );
+  }
+
+  if (!this->savedTimings.empty()) {
+    std::fprintf(
+        output, "%s%s%s%s\n",
+        this->savedTimingsFailed ? Ansi::ANSI_COLOR_BRIGHT_RED : Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+        this->savedTimingsFailed ? TAG_ERROR : "", this->savedTimings.c_str(), Ansi::ANSI_RESET
     );
   }
 

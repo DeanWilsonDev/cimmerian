@@ -1,5 +1,6 @@
 #pragma once
 #include "test-registry.hpp"
+#include "test-timings.hpp"
 #include "i-test-fail-handler.hpp"
 #include <cstddef>
 #include <cstdio>
@@ -47,6 +48,10 @@ struct TestRunSummary {
   std::string slowestTestGroupName;
   std::string slowestTestName;
   std::vector<TestCaseTimingResult> perTestTimings;
+  // Each top-level group's time, hooks included, in run order, as
+  // --save-timings writes it. The tests outside every DESCRIBE are the group
+  // named "".
+  std::vector<GroupTiming> groupTimings;
 
   // Snapshot testing extension (string / inline / hash snapshots)
   int snapshotsMatched = 0;
@@ -194,6 +199,12 @@ private:
   // The group whose BEFORE_ALL failed, while its tests are being failed
   // without running; nullptr otherwise.
   const TestGroup* failedSetupGroup = nullptr;
+
+  // For the summary: how --shard balanced this run when given --timings, and
+  // what --save-timings did.
+  std::string shardBalance;
+  std::string savedTimings;
+  bool savedTimingsFailed = false;
 
   bool IsInScope(const TestCase& test) const;
   bool WillRun(const TestCase& test) const;

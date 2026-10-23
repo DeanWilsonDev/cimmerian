@@ -503,6 +503,8 @@ Timing is reported per test, per group, for the total suite, and highlights the 
 | `--filter <pattern>` | Runs only the tests whose full name contains `pattern`. Case matters. |
 | `--list` | Prints the full name of each test a run with the same flags would run, then exits without running anything. |
 | `--shard <index>/<count>` | Runs the `index`-th of `count` slices, counting from 1. |
+| `--save-timings <file>` | After the run, writes how long each top-level `DESCRIBE` took. |
+| `--timings <file>` | Makes `--shard` balance the slices by the times in `file`. |
 
 `--filter=<pattern>` and `--shard=<index>/<count>` work too. The flags
 combine: `--filter` picks the tests, `--shard` slices what it picked, and
@@ -521,8 +523,9 @@ once:
 
 - Each top-level `DESCRIBE` goes to one shard, with everything nested in it,
   so its hooks and shared state work as they do in a full run.
-- The groups are spread so each shard has about the same number of tests.
-  Every process works out the same split from the same binary and flags.
+- The groups are spread so each shard has about the same number of tests,
+  or about the same time with `--timings` (see below). Every process works
+  out the same split from the same binary, flags and timings file.
 - Each shard's summary and exit code cover only its own tests, so the run
   passes if every shard exits 0. A shard can end up with no tests; it passes.
 - In a binary that also runs visual tests, they all run in shard 1, so only
@@ -543,6 +546,39 @@ endforeach()
 ctest --test-dir build -j 8
 ```
 
+### Balancing shards by time
+
+Test count isn't time. A group of three tests that each start an app can
+take longer than a hundred quick ones, and splitting by count can put several
+slow groups in one shard. To split by time instead, record how long each
+top-level group takes, then pass the file to every shard:
+
+```bash
+./build/my_tests --save-timings test-timings.txt                     # once, unsharded
+./build/my_tests --shard 2/4 --timings test-timings.txt               # in every shard
+```
+
+- A group weighs its recorded time, scaled to the tests it runs now, so a
+  group that gained tests or that `--filter` cuts down weighs what it will
+  take. A group with no recorded time, such as a new one, weighs its tests at
+  the mean time of a recorded test.
+- Times include the group's hooks and nested groups.
+- If the file doesn't exist yet, the shards balance by test count, and each
+  shard's summary says so. If it can't be read or parsed, the run stops with
+  an error, since shards that read it differently would split the tests
+  differently and run some twice or not at all.
+- A shard can save its own groups' times with `--save-timings`, but not over
+  the `--timings` file it reads: a shard that started later would see a
+  different file. Save each shard to its own file and concatenate them. Each
+  line is one group, and a later line for a group replaces an earlier one:
+
+```bash
+cat test-timings-*.txt > test-timings.txt
+```
+
+No shard can finish faster than the slowest single top-level group, so
+split a group that takes much longer than the rest.
+
 The provided entry point reads these flags. A hand-written `main` needs to
 call `Cimmerian::ParseArgs(argc, argv)`. A visual runner's
 `VisualTestRunner::ParseArgs` reads them too.
@@ -560,6 +596,7 @@ Cimmerian/
 │   ├── test-registry.hpp               — test tree registration
 │   ├── test-runner.hpp                 — execution, timing and failure layout
 │   ├── test-selection.hpp              — --filter, --list and --shard
+│   ├── test-timings.hpp                — --save-timings and --timings files
 │   ├── test-assertions.hpp             — typed assertions and diff output
 │   ├── test-fail-record.hpp            — a failure: file, line, message, detail lines
 │   ├── test-fail-handler-registry.hpp  — where assertions report failures
