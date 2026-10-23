@@ -120,8 +120,12 @@ static bool IsSameFile(const std::string& left, const std::string& right)
 {
   std::error_code leftError;
   std::error_code rightError;
-  const std::filesystem::path leftPath = std::filesystem::weakly_canonical(left, leftError);
-  const std::filesystem::path rightPath = std::filesystem::weakly_canonical(right, rightError);
+  // Absolute first: libstdc++ returns a relative path that doesn't exist yet
+  // unchanged, so "t.txt" and "./t.txt" would compare unequal.
+  const std::filesystem::path leftPath =
+      std::filesystem::weakly_canonical(std::filesystem::absolute(left, leftError), leftError);
+  const std::filesystem::path rightPath =
+      std::filesystem::weakly_canonical(std::filesystem::absolute(right, rightError), rightError);
   if (leftError || rightError) {
     return std::filesystem::path(left).lexically_normal() ==
            std::filesystem::path(right).lexically_normal();
