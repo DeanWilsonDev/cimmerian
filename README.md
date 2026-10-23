@@ -237,6 +237,26 @@ DESCRIBE("Database", {
 | `BEFORE_EACH` | Before every test in the group |
 | `AFTER_EACH` | After every test in the group |
 
+If `BEFORE_ALL` fails an assertion or throws, every test in its group fails
+without running, nested groups included. `AFTER_ALL` still runs, to tear down
+whatever was set up. A failed `AFTER_ALL` gets its own `[FAIL]` line and fails
+the run, even if every test passed. Either way, the summary names the hook:
+
+```
+[Database]
+[FAIL] [Database] BEFORE_ALL
+
+      ASSERT_TRUE failed: connected
+
+      at db.test.cpp:8
+
+[FAIL] [Database] inserts a record  (not run: BEFORE_ALL failed)
+[FAIL] [Database] finds a record  (not run: BEFORE_ALL failed)
+...
+Summary: 5 total, 3 passed, 2 failed
+BEFORE_ALL failed in [Database], so 2 tests didn't run
+```
+
 ### Skipping and focusing tests
 
 Append `_SKIP` or `_ONLY` to any test or group macro.
@@ -422,9 +442,10 @@ that test, and the run carries on. `what()` becomes the detail. A throwing
             settings.toml: no such file
 ```
 
-Two cases still end the whole run: an exception escaping `BEFORE_ALL` or
-`AFTER_ALL`, and a memory fault such as an out-of-bounds read. Use `REQUIRE_*`
-to stop a test before it reads past a failed check.
+An exception escaping `BEFORE_ALL` or `AFTER_ALL` fails that hook, as
+described under [Lifecycle hooks](#lifecycle-hooks). A memory fault, such as an
+out-of-bounds read, still ends the whole run. Use `REQUIRE_*` to stop a test
+before it reads past a failed check.
 
 ### Reporting a failure from your own helper
 

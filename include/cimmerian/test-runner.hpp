@@ -2,6 +2,7 @@
 #include "test-registry.hpp"
 #include "i-test-fail-handler.hpp"
 #include <cstddef>
+#include <cstdio>
 #include <chrono>
 #include <exception>
 #include <optional>
@@ -12,6 +13,8 @@
 
 namespace Cimmerian {
 
+struct TestSelection;
+
 using TestDuration = std::chrono::duration<double, std::milli>;
 
 struct TestCaseTimingResult {
@@ -20,11 +23,25 @@ struct TestCaseTimingResult {
   TestDuration elapsedTime;
 };
 
+// A group's BEFORE_ALL or AFTER_ALL that failed an assertion or threw.
+struct GroupHookFailure {
+  std::string groupPath; // "Group > Subgroup"
+  std::string hookName;  // "BEFORE_ALL" or "AFTER_ALL"
+  int testsNotRun = 0;   // for a BEFORE_ALL, the tests it failed without running
+};
+
 struct TestRunSummary {
   int total = 0; // includes skipped tests
   int passed = 0;
+  // Failed tests, plus each failed AFTER_ALL and any run-level error (a bad
+  // command line, a forbidden _ONLY or _SKIP), so it's nonzero whenever the
+  // run failed and a main can exit on it.
   int failed = 0;
   int skipped = 0; // *_SKIP'd, or left out by an *_ONLY elsewhere
+  // Every group hook that failed, in run order. A failed BEFORE_ALL reaches
+  // `failed` through the tests it failed; a failed AFTER_ALL fails no test, so
+  // it's counted in `failed` itself.
+  std::vector<GroupHookFailure> hookFailures;
   TestDuration totalElapsedTime {0};
   TestDuration slowestTestElapsedTime {0};
   std::string slowestTestGroupName;
@@ -42,7 +59,16 @@ struct TestRunSummary {
 class TestRunner : public ITestFailHandler {
 public:
   TestRunner();
-  ~TestRunner() = default;
+  // Hands failures back to the runner that was active before this one, so a
+  // runner made inside a test (as Cimmerian's own tests do) can come and go.
+  ~TestRunner() override;
+
+  // The fail handler registry holds this runner's address.
+  TestRunner(const TestRunner&) = delete;
+  TestRunner& operator=(const TestRunner&) = delete;
+
+  // Where the run's report goes: stdout unless set.
+  void SetOutput(std::FILE* stream) { this->output = stream; }
 
   void OnTestFail(const TestFailRecord& failure) override;
 
@@ -65,10 +91,10 @@ public:
   // extension needing its own registry of the active runner.
   static TestRunner* GetActive() { return activeInstance; }
 
-  // Runs one stage of the current test - a hook or the body - reporting an
-  // exception that escapes it as a failure of that test, so one bad test can't
-  // end the run. Returns false if the stage threw. A memory fault isn't an
-  // exception and still takes the run down.
+  // Runs one stage of the run - a test's body or one of its group's hooks -
+  // reporting an exception that escapes it as a failure of that stage, so one
+  // bad test can't end the run. Returns false if the stage threw. A memory
+  // fault isn't an exception and still takes the run down.
   template <typename TStage>
   bool RunContained(const char* stageName, TStage&& stage)
   {
@@ -161,9 +187,28 @@ private:
   std::vector<TestFailRecord> pendingFailures;
   static inline TestRunner* activeInstance = nullptr;
 
+  std::FILE* output = stdout;
+  TestRunner* previousActive = nullptr;
+  ITestFailHandler* previousHandler = nullptr;
+
+  // The group whose BEFORE_ALL failed, while its tests are being failed
+  // without running; nullptr otherwise.
+  const TestGroup* failedSetupGroup = nullptr;
+
   bool IsInScope(const TestCase& test) const;
   bool WillRun(const TestCase& test) const;
   bool WillPrint(const TestCase& test) const;
+
+  // Runs a group's BEFORE_ALL or AFTER_ALL and reports any failure under its
+  // own [FAIL] line. Returns false if the hook failed.
+  bool RunGroupHook(
+      const TestGroup* group,
+      const char* hookName,
+      void (TestGroup::*hook)() const,
+      TestRunSummary* summary
+  );
+  void PrintFailures();
+  void PrintSummary(const TestRunSummary& summary, const TestSelection& selection);
 };
 
 } // namespace Cimmerian

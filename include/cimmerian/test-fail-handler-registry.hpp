@@ -24,6 +24,8 @@ public:
     this->activeHandler = handlerToRegister;
   }
 
+  ITestFailHandler* GetHandler() const { return this->activeHandler; }
+
   void NotifyTestFail(const TestFailRecord& failure)
   {
     if (this->activeHandler) {

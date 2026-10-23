@@ -73,19 +73,30 @@ struct TestLogPrintLocation {
 };
 
 template <typename... Args>
-CIMMERIAN_MAYBE_UNUSED inline void
-TestLogPrint(LogColor color, std::format_string<Args...> formatString, Args&&... args)
+CIMMERIAN_MAYBE_UNUSED inline void TestLogPrintTo(
+    std::FILE* stream,
+    LogColor color,
+    std::format_string<Args...> formatString,
+    Args&&... args
+)
 {
   auto formattedMessage = std::format(formatString, std::forward<Args>(args)...);
   if (color != LogColor::Reset) {
-    std::fputs(GetAnsiCode(color).data(), stdout);
+    std::fputs(GetAnsiCode(color).data(), stream);
   }
 
-  std::fputs(formattedMessage.c_str(), stdout);
-  std::fputc('\n', stdout);
+  std::fputs(formattedMessage.c_str(), stream);
+  std::fputc('\n', stream);
   if (color != LogColor::Reset) {
-    std::fputs(GetAnsiCode(LogColor::Reset).data(), stdout);
+    std::fputs(GetAnsiCode(LogColor::Reset).data(), stream);
   }
+}
+
+template <typename... Args>
+CIMMERIAN_MAYBE_UNUSED inline void
+TestLogPrint(LogColor color, std::format_string<Args...> formatString, Args&&... args)
+{
+  TestLogPrintTo(stdout, color, formatString, std::forward<Args>(args)...);
 }
 
 } // namespace Cimmerian::Log

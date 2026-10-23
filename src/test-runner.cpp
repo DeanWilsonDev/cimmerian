@@ -41,8 +41,22 @@ TestRunner::TestRunner()
     , isFailure(false)
     , totalFailures(0)
 {
-  TestFailHandlerRegistry::GetInstance().RegisterHandler(this);
+  TestFailHandlerRegistry& handlers = TestFailHandlerRegistry::GetInstance();
+  this->previousHandler = handlers.GetHandler();
+  this->previousActive = activeInstance;
+  handlers.RegisterHandler(this);
   activeInstance = this;
+}
+
+TestRunner::~TestRunner()
+{
+  TestFailHandlerRegistry& handlers = TestFailHandlerRegistry::GetInstance();
+  if (handlers.GetHandler() == this) {
+    handlers.RegisterHandler(this->previousHandler);
+  }
+  if (activeInstance == this) {
+    activeInstance = this->previousActive;
+  }
 }
 
 static std::string ExtractBasename(const std::string& filePath)
@@ -51,26 +65,26 @@ static std::string ExtractBasename(const std::string& filePath)
   return (lastSlashPosition == std::string::npos) ? filePath : filePath.substr(lastSlashPosition + 1);
 }
 
-static void PrintFailureBlock(const TestFailRecord& failure)
+static void PrintFailureBlock(std::FILE* output, const TestFailRecord& failure)
 {
   constexpr const char* BLOCK_INDENT  = "      ";
   constexpr const char* DETAIL_INDENT = "            ";
 
   const std::string filename = ExtractBasename(failure.file);
 
-  std::printf(
-      "\n%s%s%s%s\n", BLOCK_INDENT, Ansi::ANSI_COLOR_BRIGHT_YELLOW, failure.message.c_str(),
+  std::fprintf(
+      output, "\n%s%s%s%s\n", BLOCK_INDENT, Ansi::ANSI_COLOR_BRIGHT_YELLOW, failure.message.c_str(),
       Ansi::ANSI_RESET
   );
 
   if (!failure.details.empty()) {
-    std::printf("\n");
+    std::fprintf(output, "\n");
     for (const std::string& detailLine : failure.details) {
       if (detailLine.empty()) {
-        std::printf("\n");
+        std::fprintf(output, "\n");
       }
       else {
-        std::printf("%s%s\n", DETAIL_INDENT, detailLine.c_str());
+        std::fprintf(output, "%s%s\n", DETAIL_INDENT, detailLine.c_str());
       }
     }
   }
@@ -79,11 +93,19 @@ static void PrintFailureBlock(const TestFailRecord& failure)
     return;
   }
 
-  std::printf(
-      "\n%s%sat %s:%d%s\n",
-      BLOCK_INDENT, Ansi::ANSI_COLOR_BRIGHT_WHITE,
-      filename.c_str(), failure.line, Ansi::ANSI_RESET
+  std::fprintf(
+      output, "\n%s%sat %s:%d%s\n", BLOCK_INDENT, Ansi::ANSI_COLOR_BRIGHT_WHITE, filename.c_str(),
+      failure.line, Ansi::ANSI_RESET
   );
+}
+
+void TestRunner::PrintFailures()
+{
+  for (const TestFailRecord& failureRecord : this->pendingFailures) {
+    PrintFailureBlock(this->output, failureRecord);
+  }
+  this->pendingFailures.clear();
+  std::fprintf(this->output, "\n");
 }
 
 void TestRunner::OnTestFail(const TestFailRecord& failure)
@@ -118,6 +140,21 @@ static bool AnyTestInSubtree(const TestGroup* group, TPredicate predicate)
     }
   }
   return false;
+}
+
+template <typename TPredicate>
+static int CountTestsInSubtree(const TestGroup* group, TPredicate predicate)
+{
+  int count = 0;
+  for (const TestCase& test : group->GetTests()) {
+    if (predicate(test)) {
+      count++;
+    }
+  }
+  for (size_t i = 0; i < group->GetChildCount(); ++i) {
+    count += CountTestsInSubtree(group->GetChild(i), predicate);
+  }
+  return count;
 }
 
 bool TestRunner::IsInScope(const TestCase& test) const
@@ -164,14 +201,29 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
 
   if (test->GetMode() == TestMode::Skip) {
     summary->skipped++;
-    TEST_LOG_PRINT(
-        LogColor::Yellow, "[SKIP] [{}] {}", CheckGroupName(group->GetName()), test->GetName()
+    TestLogPrintTo(
+        this->output, LogColor::Yellow, "[SKIP] [{}] {}", CheckGroupName(group->GetName()),
+        test->GetName()
     );
     return;
   }
 
   if (!this->WillRun(*test)) {
     summary->skipped++;
+    return;
+  }
+
+  // The fixture this test needs was never set up.
+  if (this->failedSetupGroup != nullptr) {
+    summary->failed++;
+    const std::string reason =
+        (this->failedSetupGroup == group)
+            ? std::string("BEFORE_ALL failed")
+            : "BEFORE_ALL in [" + std::string(this->failedSetupGroup->GetName()) + "] failed";
+    TestLogPrintTo(
+        this->output, LogColor::Red, "[FAIL] [{}] {}  (not run: {})",
+        CheckGroupName(group->GetName()), test->GetName(), reason
+    );
     return;
   }
 
@@ -210,23 +262,48 @@ void TestRunner::RunOne(const TestGroup* group, const TestCase* test, TestRunSum
 
   if (this->isFailure) {
     summary->failed++;
-    TEST_LOG_PRINT(
-        LogColor::Red, "[FAIL] [{}] {}  ({:.4f}ms)", CheckGroupName(group->GetName()),
+    TestLogPrintTo(
+        this->output, LogColor::Red, "[FAIL] [{}] {}  ({:.4f}ms)", CheckGroupName(group->GetName()),
         test->GetName(), elapsedTime.count()
     );
-    for (const TestFailRecord& failureRecord : this->pendingFailures) {
-      PrintFailureBlock(failureRecord);
-    }
-    this->pendingFailures.clear();
-    std::printf("\n");
+    this->PrintFailures();
   }
   else {
     summary->passed++;
-    TEST_LOG_PRINT(
-        LogColor::Green, "[PASS] [{}] {}  ({:.4f}ms)", CheckGroupName(group->GetName()),
-        test->GetName(), elapsedTime.count()
+    TestLogPrintTo(
+        this->output, LogColor::Green, "[PASS] [{}] {}  ({:.4f}ms)",
+        CheckGroupName(group->GetName()), test->GetName(), elapsedTime.count()
     );
   }
+}
+
+bool TestRunner::RunGroupHook(
+    const TestGroup* group,
+    const char* hookName,
+    void (TestGroup::*hook)() const,
+    TestRunSummary* summary
+)
+{
+  // What GetCurrentTest() has always returned inside these hooks.
+  const char* contextName =
+      (std::strcmp(hookName, "BEFORE_ALL") == 0) ? "(before_all)" : "(after_all)";
+
+  this->isFailure = false;
+  this->currentGroupPath = BuildGroupPath(group);
+  this->BeginContext(group->GetName(), contextName);
+  this->RunContained(hookName, [&] { (group->*hook)(); });
+  this->EndContext();
+
+  if (!this->isFailure) {
+    return true;
+  }
+
+  TestLogPrintTo(
+      this->output, LogColor::Red, "[FAIL] [{}] {}", CheckGroupName(group->GetName()), hookName
+  );
+  this->PrintFailures();
+  summary->hookFailures.push_back({.groupPath = this->currentGroupPath, .hookName = hookName});
+  return false;
 }
 
 TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* summary)
@@ -246,18 +323,24 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
 
 #ifndef ENABLE_DEBUG
   if (strcmp(group->GetName(), "ROOT") && AnyTestInSubtree(group, willPrint)) {
-    TEST_LOG_PRINT(LogColor::Cyan, "[{}]", group->GetName());
+    TestLogPrintTo(this->output, LogColor::Cyan, "[{}]", group->GetName());
   }
 #endif
 
-  // Skipped tests don't need the group's fixtures set up.
+  // Skipped tests don't need the group's fixtures set up, and a group under a
+  // failed BEFORE_ALL sets nothing up.
   const bool runsAnyTest = AnyTestInSubtree(group, willRun);
+  const bool runsHooks = runsAnyTest && this->failedSetupGroup == nullptr;
 
-  if (runsAnyTest) {
-    this->BeginContext(group->GetName(), "(before_all)");
-    group->ExecuteBeforeAll();
-    EndContext();
+  // As in Jest, a failed BEFORE_ALL fails every test under its group, nested
+  // groups included, without running them. AFTER_ALL still runs, to tear down
+  // whatever BEFORE_ALL did set up.
+  if (runsHooks &&
+      !this->RunGroupHook(group, "BEFORE_ALL", &TestGroup::ExecuteBeforeAll, summary)) {
+    this->failedSetupGroup = group;
+    summary->hookFailures.back().testsNotRun = CountTestsInSubtree(group, willRun);
   }
+  const bool runsTests = this->failedSetupGroup == nullptr;
 
   auto groupStartTime = std::chrono::high_resolution_clock::now();
 
@@ -269,23 +352,27 @@ TestRunSummary* TestRunner::RunGroup(const TestGroup* group, TestRunSummary* sum
   for (size_t i = 0; i < group->GetChildCount(); ++i) {
     this->RunGroup(group->GetChild(i), summary);
     if (AnyTestInSubtree(group->GetChild(i), willPrint)) {
-      std::printf("\n");
+      std::fprintf(this->output, "\n");
     }
   }
 
   auto groupEndTime = std::chrono::high_resolution_clock::now();
   TestDuration groupElapsedTime = groupEndTime - groupStartTime;
 
-  if (strcmp(group->GetName(), "ROOT") != 0 && runsAnyTest) {
-    TEST_LOG_PRINT(
-        LogColor::Yellow, "[{}] group total: {:.4f}ms", group->GetName(), groupElapsedTime.count()
+  if (strcmp(group->GetName(), "ROOT") != 0 && runsAnyTest && runsTests) {
+    TestLogPrintTo(
+        this->output, LogColor::Yellow, "[{}] group total: {:.4f}ms", group->GetName(),
+        groupElapsedTime.count()
     );
   }
 
-  if (runsAnyTest) {
-    this->BeginContext(group->GetName(), "(after_all)");
-    group->ExecuteAfterAll();
-    EndContext();
+  if (this->failedSetupGroup == group) {
+    this->failedSetupGroup = nullptr;
+  }
+
+  // A failed AFTER_ALL fails no test, so it counts as a failure itself.
+  if (runsHooks && !this->RunGroupHook(group, "AFTER_ALL", &TestGroup::ExecuteAfterAll, summary)) {
+    summary->failed++;
   }
 
   return summary;
@@ -295,7 +382,12 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
 {
 
   if (!registry || !registry->GetRootGroup()) {
-    TEST_LOG_ERROR("root TestGroup was unable to be set on default registry");
+    TestLogPrintTo(
+        this->output, LogColor::Red,
+        TAG_ERROR "root TestGroup was unable to be set on default registry"
+    );
+    // abort() doesn't flush, and the message is the only clue to why the run died.
+    std::fflush(this->output);
     std::abort();
   }
 
@@ -305,16 +397,20 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   // so entry points that exit on summary.failed fail the run.
   const TestSelectionOptions& selectionOptions = TestSelectionRegistry::GetInstance().Get();
   if (!selectionOptions.error.empty()) {
-    TEST_LOG_ERROR("{}; not running any tests", selectionOptions.error);
+    TestLogPrintTo(
+        this->output, LogColor::Red, TAG_ERROR "{}; not running any tests", selectionOptions.error
+    );
     summary.failed = 1;
     return summary;
   }
 
 #ifdef CIMMERIAN_ENABLE_SNAPSHOT_TESTING
   if (selectionOptions.shard && Snapshot::SnapshotRunModeRegistry::GetInstance().IsUpdateMode()) {
-    TEST_LOG_ERROR(
-        "--update-snapshots can't be used with --shard, since parallel shards would write the same "
-        "snapshot files; update them in one unsharded run. Not running any tests"
+    TestLogPrintTo(
+        this->output, LogColor::Red,
+        TAG_ERROR
+        "--update-snapshots can't be used with --shard, since parallel shards would write "
+        "the same snapshot files; update them in one unsharded run. Not running any tests"
     );
     summary.failed = 1;
     return summary;
@@ -324,9 +420,12 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   std::vector<std::string> forbiddenTests;
   CollectForbiddenTests(registry->GetRootGroup(), &forbiddenTests);
   if (!forbiddenTests.empty()) {
-    TEST_LOG_ERROR("{} forbidden test(s) found, not running any tests:", forbiddenTests.size());
+    TestLogPrintTo(
+        this->output, LogColor::Red,
+        TAG_ERROR "{} forbidden test(s) found, not running any tests:", forbiddenTests.size()
+    );
     for (const std::string& forbiddenTest : forbiddenTests) {
-      TEST_LOG_PRINT(LogColor::Red, "  {}", forbiddenTest);
+      TestLogPrintTo(this->output, LogColor::Red, "  {}", forbiddenTest);
     }
     // Counted as failures so entry points that exit on summary.failed fail the run.
     summary.failed = static_cast<int>(forbiddenTests.size());
@@ -347,7 +446,7 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   if (selectionOptions.listOnly) {
     for (const SelectedTest& selected : selection.tests) {
       if (this->WillRun(*selected.test)) {
-        std::printf("%s\n", selected.fullName.c_str());
+        std::fprintf(this->output, "%s\n", selected.fullName.c_str());
       }
     }
     return summary;
@@ -373,39 +472,73 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   summary.inlineRewriteCount = snapshotSummary.inlineRewriteCount;
 #endif
 
-  // Print summary
-  std::printf("\n");
-  std::printf("────────────────────────────────────────────────");
+  this->PrintSummary(summary, selection);
+  return summary;
+}
 
-  std::printf(
-      "\nSummary: %s%d total%s, %s%d passed%s, %s%d failed%s", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
-      summary.total, Ansi::ANSI_RESET, Ansi::ANSI_COLOR_BRIGHT_GREEN, summary.passed,
-      Ansi::ANSI_RESET, Ansi::ANSI_COLOR_BRIGHT_RED, summary.failed, Ansi::ANSI_RESET
+void TestRunner::PrintSummary(const TestRunSummary& summary, const TestSelection& selection)
+{
+  const TestSelectionOptions& selectionOptions = TestSelectionRegistry::GetInstance().Get();
+  std::FILE* output = this->output;
+
+  // A failed AFTER_ALL is counted in summary.failed but isn't a failed test.
+  int failedAfterAllHooks = 0;
+  for (const GroupHookFailure& hookFailure : summary.hookFailures) {
+    if (hookFailure.hookName == "AFTER_ALL") {
+      failedAfterAllHooks++;
+    }
+  }
+
+  std::fprintf(output, "\n");
+  std::fprintf(output, "────────────────────────────────────────────────");
+
+  std::fprintf(
+      output, "\nSummary: %s%d total%s, %s%d passed%s, %s%d failed%s",
+      Ansi::ANSI_COLOR_BRIGHT_YELLOW, summary.total, Ansi::ANSI_RESET,
+      Ansi::ANSI_COLOR_BRIGHT_GREEN, summary.passed, Ansi::ANSI_RESET, Ansi::ANSI_COLOR_BRIGHT_RED,
+      summary.failed - failedAfterAllHooks, Ansi::ANSI_RESET
   );
   if (summary.skipped > 0) {
-    std::printf(
-        ", %s%d skipped%s", Ansi::ANSI_COLOR_BRIGHT_YELLOW, summary.skipped, Ansi::ANSI_RESET
+    std::fprintf(
+        output, ", %s%d skipped%s", Ansi::ANSI_COLOR_BRIGHT_YELLOW, summary.skipped,
+        Ansi::ANSI_RESET
     );
   }
-  std::printf("\n\n");
+  std::fprintf(output, "\n");
+
+  // A failed hook fails the run even when every test passed, so say which.
+  for (const GroupHookFailure& hookFailure : summary.hookFailures) {
+    std::fprintf(
+        output, "%s%s failed in [%s]", Ansi::ANSI_COLOR_BRIGHT_RED, hookFailure.hookName.c_str(),
+        hookFailure.groupPath.c_str()
+    );
+    if (hookFailure.testsNotRun > 0) {
+      std::fprintf(
+          output, ", so %d %s didn't run", hookFailure.testsNotRun,
+          hookFailure.testsNotRun == 1 ? "test" : "tests"
+      );
+    }
+    std::fprintf(output, "%s\n", Ansi::ANSI_RESET);
+  }
+  std::fprintf(output, "\n");
 
   if (TestModeRegistry::GetInstance().HasFocusedTests()) {
-    std::printf(
-        "%sFocused run: only *_ONLY tests were run%s\n",
-        Ansi::ANSI_COLOR_BRIGHT_YELLOW, Ansi::ANSI_RESET
+    std::fprintf(
+        output, "%sFocused run: only *_ONLY tests were run%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+        Ansi::ANSI_RESET
     );
   }
 
   if (!selectionOptions.filter.empty()) {
     if (selection.matchedCount == 0) {
-      std::printf(
-          "%s--filter \"%s\" matched no tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+      std::fprintf(
+          output, "%s--filter \"%s\" matched no tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
           selectionOptions.filter.c_str(), Ansi::ANSI_RESET
       );
     }
     else {
-      std::printf(
-          "%sFilter \"%s\": %d of %d tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+      std::fprintf(
+          output, "%sFilter \"%s\": %d of %d tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
           selectionOptions.filter.c_str(), selection.matchedCount, selection.registeredCount,
           Ansi::ANSI_RESET
       );
@@ -413,36 +546,35 @@ TestRunSummary TestRunner::RunAll(const TestRegistry* registry)
   }
 
   if (selectionOptions.shard) {
-    std::printf(
-        "%sShard %d/%d: %zu of %d tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+    std::fprintf(
+        output, "%sShard %d/%d: %zu of %d tests%s\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
         selectionOptions.shard->index, selectionOptions.shard->count, selection.tests.size(),
         selection.matchedCount, Ansi::ANSI_RESET
     );
   }
 
-  if (summary.passed + summary.failed > 0) {
-    std::printf(
-        "%sSlowest: [%s] %s (%.4fms)\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
+  if (!summary.perTestTimings.empty()) {
+    std::fprintf(
+        output, "%sSlowest: [%s] %s (%.4fms)\n", Ansi::ANSI_COLOR_BRIGHT_YELLOW,
         summary.slowestTestGroupName.c_str(), summary.slowestTestName.c_str(),
         summary.slowestTestElapsedTime.count()
     );
   }
 
-  std::printf("────────────────────────────────────────────────\n");
+  std::fprintf(output, "────────────────────────────────────────────────\n");
 
   const int totalSnapshotActivity =
       summary.snapshotsMatched + summary.snapshotsFailed + summary.snapshotsUpdated + summary.snapshotsMissing;
   if (totalSnapshotActivity > 0) {
-    std::printf(
-        "Snapshots: %d matched, %d failed, %d updated, %d missing", summary.snapshotsMatched,
-        summary.snapshotsFailed, summary.snapshotsUpdated, summary.snapshotsMissing
+    std::fprintf(
+        output, "Snapshots: %d matched, %d failed, %d updated, %d missing",
+        summary.snapshotsMatched, summary.snapshotsFailed, summary.snapshotsUpdated,
+        summary.snapshotsMissing
     );
     if (summary.inlineRewriteCount > 0) {
-      std::printf(" (%d source file(s) rewritten)", summary.inlineRewriteCount);
+      std::fprintf(output, " (%d source file(s) rewritten)", summary.inlineRewriteCount);
     }
-    std::printf("\n────────────────────────────────────────────────\n");
+    std::fprintf(output, "\n────────────────────────────────────────────────\n");
   }
-
-  return summary;
 }
 } // namespace Cimmerian

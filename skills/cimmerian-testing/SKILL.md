@@ -153,6 +153,12 @@ carries on. A throwing `BEFORE_EACH` skips the test's body but still runs
 still takes the whole run down, which is why a size check that guards an
 index should be a `REQUIRE_*`.
 
+If `BEFORE_ALL` fails an assertion or throws, every test in its group, nested
+groups included, is reported `[FAIL] ... (not run: BEFORE_ALL failed)` without
+running, and `AFTER_ALL` still runs. A failed `AFTER_ALL` gets its own
+`[FAIL] [Group] AFTER_ALL` line and fails the run, even if every test passed.
+It's counted in `summary.failed`, so a `main` that exits on it needs no change.
+
 ## Snapshot testing (`cimmerian/snapshot.hpp`)
 
 Three flavors, all `DESCRIBE`/`TEST`-compatible:

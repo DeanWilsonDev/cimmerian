@@ -275,7 +275,7 @@ if(CIMMERIAN_BUILD_TESTS)
   enable_language(CXX)
 
   set(_CIMMERIAN_TEST_SOURCES test/test-main.cpp test/example.test.cpp
-                              test/selection.test.cpp)
+                              test/group-hooks.test.cpp test/selection.test.cpp)
 
   if(CIMMERIAN_ENABLE_SNAPSHOT_TESTING)
     list(APPEND _CIMMERIAN_TEST_SOURCES test/snapshot.test.cpp)
