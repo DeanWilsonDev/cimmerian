@@ -657,7 +657,6 @@ Cimmerian/
 ├── test/                               — Cimmerian's own self-tests
 ├── snapshots/                          — golden images for the visual self-tests
 ├── tools/x11-capture-stability/        — measures X11 capture against mid-capture repaints
-├── skills/cimmerian-testing/           — agent skill describing the consumer API
 └── CMakeLists.txt
 ```
 
